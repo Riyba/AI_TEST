@@ -72,11 +72,17 @@ export default function AgentsPage() {
             </div>
             <div>
               <label>Model</label>
-              <select value={editing.data.model} onChange={(e) => set({ model: e.target.value })}>
-                {(meta?.models ?? [editing.data.model]).map((m) => (
-                  <option key={m} value={m}>{m}</option>
+              <input
+                value={editing.data.model}
+                onChange={(e) => set({ model: e.target.value })}
+                list="model-suggestions"
+                placeholder="e.g. claude-sonnet-5"
+              />
+              <datalist id="model-suggestions">
+                {meta?.models.map((m) => (
+                  <option key={m} value={m} />
                 ))}
-              </select>
+              </datalist>
             </div>
             <div className="full">
               <label>Role / persona</label>

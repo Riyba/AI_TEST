@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..llm import AVAILABLE_MODELS
 from ..models import Agent
 from ..schemas import AgentIn, AgentOut
 from ..tools import REGISTRY
@@ -14,8 +13,8 @@ router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
 def _validate(payload: AgentIn) -> None:
-    if payload.model not in AVAILABLE_MODELS:
-        raise HTTPException(422, f"unknown model '{payload.model}'")
+    if not payload.model.strip():
+        raise HTTPException(422, "model is required")
     unknown = [t for t in payload.tools if t not in REGISTRY]
     if unknown:
         raise HTTPException(422, f"unknown tools: {unknown}")
