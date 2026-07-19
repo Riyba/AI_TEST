@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+.venv/
+backend/data/
+.env
+node_modules/
+dist/
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Python tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Claude Code local settings
+.claude/settings.local.json
