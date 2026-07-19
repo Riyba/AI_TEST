@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
-import type { Run } from "../types";
+import { TimeSavedEditor, formatTimeSaved } from "../components/TimeSaved";
+import type { Run, RunStatus } from "../types";
+
+const TERMINAL: RunStatus[] = ["succeeded", "failed", "rejected", "cancelled"];
 
 export default function RunsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -15,6 +20,20 @@ export default function RunsPage() {
     }, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  const saveTimeSaved = (runId: number, minutes: number | null) => {
+    setSaving(true);
+    api
+      .setTimeSaved(runId, minutes)
+      .then((updated) => {
+        setRuns((current) =>
+          current.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
+        );
+        setEditingId(null);
+      })
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setSaving(false));
+  };
 
   return (
     <div>
@@ -28,7 +47,7 @@ export default function RunsPage() {
         <thead>
           <tr>
             <th>#</th><th>Workflow</th><th>Task</th><th>Status</th>
-            <th>Tokens (in/out)</th><th>Started</th>
+            <th>Tokens (in/out)</th><th>Time saved</th><th>Started</th>
           </tr>
         </thead>
         <tbody>
@@ -40,6 +59,31 @@ export default function RunsPage() {
               <td><span className={`badge ${run.status}`}>{run.status}</span></td>
               <td className="muted">
                 {run.total_input_tokens} / {run.total_output_tokens}
+              </td>
+              <td>
+                {editingId === run.id ? (
+                  <TimeSavedEditor
+                    initial={run.time_saved_minutes}
+                    busy={saving}
+                    dismissLabel="Cancel"
+                    allowClear
+                    onSave={(minutes) => saveTimeSaved(run.id, minutes)}
+                    onDismiss={() => setEditingId(null)}
+                  />
+                ) : (
+                  <span className="time-saved-cell">
+                    {formatTimeSaved(run.time_saved_minutes)}
+                    {TERMINAL.includes(run.status) && (
+                      <button
+                        className="link-btn"
+                        title="Edit estimated time saved"
+                        onClick={() => setEditingId(run.id)}
+                      >
+                        edit
+                      </button>
+                    )}
+                  </span>
+                )}
               </td>
               <td className="muted">{new Date(run.created_at).toLocaleString()}</td>
             </tr>

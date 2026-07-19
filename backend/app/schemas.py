@@ -57,6 +57,8 @@ class RunOut(BaseModel):
     error: str | None = None
     total_input_tokens: int
     total_output_tokens: int
+    # None = the user never captured an estimate for this run.
+    time_saved_minutes: int | None = None
     created_at: datetime
     finished_at: datetime | None = None
 
@@ -90,6 +92,54 @@ class ArtifactOut(BaseModel):
 class RunDetail(RunOut):
     steps: list[StepOut] = Field(default_factory=list)
     artifacts: list[ArtifactOut] = Field(default_factory=list)
+
+
+class TimeSavedIn(BaseModel):
+    # None clears a previously captured estimate. Capped at 30 days.
+    time_saved_minutes: int | None = Field(default=None, ge=0, le=43_200)
+
+
+class MetricsTotals(BaseModel):
+    runs: int
+    runs_by_status: dict[str, int]
+    input_tokens: int
+    output_tokens: int
+    time_saved_minutes: int
+    runs_with_time_saved: int
+
+
+class DayMetrics(BaseModel):
+    date: str  # ISO date (UTC)
+    runs: int
+    input_tokens: int
+    output_tokens: int
+    time_saved_minutes: int
+    runs_with_time_saved: int
+
+
+class WorkflowMetrics(BaseModel):
+    workflow_name: str
+    runs: int
+    succeeded: int
+    input_tokens: int
+    output_tokens: int
+    time_saved_minutes: int
+    runs_with_time_saved: int
+
+
+class AgentMetrics(BaseModel):
+    agent: str
+    steps: int
+    runs: int
+    input_tokens: int
+    output_tokens: int
+
+
+class MetricsOut(BaseModel):
+    totals: MetricsTotals
+    by_day: list[DayMetrics]
+    by_workflow: list[WorkflowMetrics]
+    by_agent: list[AgentMetrics]
 
 
 class ApprovalDecision(BaseModel):

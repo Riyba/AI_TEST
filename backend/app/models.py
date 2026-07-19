@@ -70,6 +70,10 @@ class Run(Base):
     thread_id: Mapped[str] = mapped_column(String(64))
     total_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     total_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # User-estimated time saved by this run, in minutes. NULL means the user
+    # never captured an estimate — metrics must exclude those runs, so 0 and
+    # "not captured" stay distinct.
+    time_saved_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

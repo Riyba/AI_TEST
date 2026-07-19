@@ -4,6 +4,7 @@ import { api } from "./api";
 import type { Meta } from "./types";
 import SettingsMenu from "./SettingsMenu";
 import AgentsPage from "./pages/AgentsPage";
+import MetricsPage from "./pages/MetricsPage";
 import RunDetailPage from "./pages/RunDetailPage";
 import RunLaunchPage from "./pages/RunLaunchPage";
 import RunsPage from "./pages/RunsPage";
@@ -26,6 +27,7 @@ export default function App() {
         <NavLink to="/workflows">Workflows</NavLink>
         <NavLink to="/agents">Agents</NavLink>
         <NavLink to="/runs">Runs</NavLink>
+        <NavLink to="/metrics">Metrics</NavLink>
         <div className="sidebar-footer">
           {meta && !meta.api_key_configured && (
             <div className="warn">ANTHROPIC_API_KEY not set</div>
@@ -46,6 +48,7 @@ export default function App() {
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/new" element={<RunLaunchPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
+          <Route path="/metrics" element={<MetricsPage />} />
         </Routes>
       </main>
     </div>

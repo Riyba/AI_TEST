@@ -80,8 +80,53 @@ export interface Run {
   error: string | null;
   total_input_tokens: number;
   total_output_tokens: number;
+  /** null = the user never captured an estimate for this run */
+  time_saved_minutes: number | null;
   created_at: string;
   finished_at: string | null;
+}
+
+export interface MetricsTotals {
+  runs: number;
+  runs_by_status: Record<string, number>;
+  input_tokens: number;
+  output_tokens: number;
+  time_saved_minutes: number;
+  runs_with_time_saved: number;
+}
+
+export interface DayMetrics {
+  date: string;
+  runs: number;
+  input_tokens: number;
+  output_tokens: number;
+  time_saved_minutes: number;
+  runs_with_time_saved: number;
+}
+
+export interface WorkflowMetrics {
+  workflow_name: string;
+  runs: number;
+  succeeded: number;
+  input_tokens: number;
+  output_tokens: number;
+  time_saved_minutes: number;
+  runs_with_time_saved: number;
+}
+
+export interface AgentMetrics {
+  agent: string;
+  steps: number;
+  runs: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface Metrics {
+  totals: MetricsTotals;
+  by_day: DayMetrics[];
+  by_workflow: WorkflowMetrics[];
+  by_agent: AgentMetrics[];
 }
 
 export interface RunStep {

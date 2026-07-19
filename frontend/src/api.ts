@@ -3,6 +3,7 @@ import type {
   AgentInput,
   GraphSpec,
   Meta,
+  Metrics,
   Run,
   RunDetail,
   Workflow,
@@ -70,4 +71,11 @@ export const api = {
     }),
   cancelRun: (id: number) =>
     request<Run>(`/api/runs/${id}/cancel`, { method: "POST" }),
+  setTimeSaved: (id: number, minutes: number | null) =>
+    request<Run>(`/api/runs/${id}/time-saved`, {
+      method: "PATCH",
+      body: JSON.stringify({ time_saved_minutes: minutes }),
+    }),
+
+  metrics: () => request<Metrics>("/api/metrics"),
 };

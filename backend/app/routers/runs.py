@@ -13,7 +13,7 @@ from ..db import SessionLocal, get_session
 from ..events import bus
 from ..models import Run, Workflow
 from ..runner import TERMINAL_STATUSES, run_manager, validate_repo_path
-from ..schemas import ApprovalDecision, RunCreate, RunDetail, RunOut
+from ..schemas import ApprovalDecision, RunCreate, RunDetail, RunOut, TimeSavedIn
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -122,6 +122,23 @@ async def submit_approval(
         raise HTTPException(409, "run is still executing")
 
     run_manager.resume(run_id, payload.model_dump())
+    await session.refresh(run)
+    return run
+
+
+@router.patch("/{run_id}/time-saved", response_model=RunOut)
+async def set_time_saved(
+    run_id: int,
+    payload: TimeSavedIn,
+    session: AsyncSession = Depends(get_session),
+) -> Run:
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+    if run.status not in TERMINAL_STATUSES:
+        raise HTTPException(409, f"run has not finished (status={run.status})")
+    run.time_saved_minutes = payload.time_saved_minutes
+    await session.commit()
     await session.refresh(run)
     return run
 

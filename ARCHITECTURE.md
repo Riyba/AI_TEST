@@ -21,7 +21,8 @@ FastAPI routers ── runner.RunManager ── LangGraph StateGraph
 - **workflows** — a `graph` JSON column holding the GraphSpec below. `is_template`
   marks seeded starters; cloning copies the graph.
 - **runs** — status, input (`task`, `repo_path`), `thread_id` (checkpointer key),
-  token totals, error.
+  token totals, error, `time_saved_minutes` (user-estimated; NULL = never
+  captured, and excluded from time-savings metrics).
 - **run_steps** — one row per executed node: input, output, tool-call log,
   per-step token usage, timestamps. This is the durable trace used for replay.
 - **artifacts** — files written by tools, plus the run's `final_output` text.
@@ -155,5 +156,15 @@ iterations and `max_tokens` is an input+output token budget per run.
   edges are auto-labeled true/false; save round-trips through server-side
   validation.
 - `src/pages/RunDetailPage.tsx` — one page for both live runs (EventSource over
-  the SSE endpoint, approval form, cancel) and finished runs (DB replay).
+  the SSE endpoint, approval form, cancel) and finished runs (DB replay). When a
+  watched run reaches a terminal status it prompts for an estimated
+  time-saved (hours/minutes); Done skips, and the estimate can be added or
+  edited later from the Runs table (`PATCH /api/runs/{id}/time-saved`,
+  terminal runs only).
+- `src/pages/MetricsPage.tsx` — reads `GET /api/metrics` (aggregated in Python
+  on request — the dataset is small) and renders stat tiles plus hand-rolled
+  SVG charts (`src/components/charts.tsx`): runs/tokens/time-saved per day,
+  tokens and steps per agent (attributed via the agent name recorded in each
+  step's input), time saved per workflow. Runs without a captured estimate are
+  excluded from time-saved figures.
 - `src/api.ts` / `src/types.ts` — typed client mirroring the pydantic schemas.

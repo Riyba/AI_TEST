@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
+import { TimeSavedEditor, formatTimeSaved } from "../components/TimeSaved";
 import type { ApprovalPayload, RunDetail, RunEvent, RunStatus } from "../types";
 
 const TERMINAL: RunStatus[] = ["succeeded", "failed", "rejected", "cancelled"];
@@ -13,7 +14,41 @@ export default function RunDetailPage() {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [approval, setApproval] = useState<ApprovalPayload | null>(null);
   const [error, setError] = useState("");
+  const [timeSavedPrompt, setTimeSavedPrompt] = useState(false);
+  const [savingTime, setSavingTime] = useState(false);
   const sourceRef = useRef<EventSource | null>(null);
+  // Only prompt for an estimate when the run finished while being watched;
+  // already-finished runs are edited from Run history instead.
+  const sawActiveRef = useRef(false);
+  const promptDismissedRef = useRef(false);
+
+  useEffect(() => {
+    if (!run) return;
+    if (!TERMINAL.includes(run.status)) {
+      sawActiveRef.current = true;
+      return;
+    }
+    if (
+      sawActiveRef.current &&
+      !promptDismissedRef.current &&
+      run.time_saved_minutes == null
+    ) {
+      setTimeSavedPrompt(true);
+    }
+  }, [run?.status, run?.time_saved_minutes]);
+
+  const submitTimeSaved = (minutes: number | null) => {
+    setSavingTime(true);
+    api
+      .setTimeSaved(runId, minutes)
+      .then(() => {
+        promptDismissedRef.current = true;
+        setTimeSavedPrompt(false);
+        refetch();
+      })
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setSavingTime(false));
+  };
 
   const refetch = useCallback(() => {
     api.getRun(runId).then(setRun).catch((e) => setError((e as Error).message));
@@ -88,8 +123,29 @@ export default function RunDetailPage() {
       {run.error && <div className="error-box">{run.error}</div>}
       <p className="muted small">
         repo: {run.input.repo_path} · task: {run.input.task || "(none)"} · tokens:{" "}
-        {run.total_input_tokens} in / {run.total_output_tokens} out
+        {run.total_input_tokens} in / {run.total_output_tokens} out · time saved:{" "}
+        {formatTimeSaved(run.time_saved_minutes)}
       </p>
+
+      {timeSavedPrompt && (
+        <div className="time-saved-prompt">
+          <h3>How much time did this run save you?</h3>
+          <p className="muted small">
+            Your estimate feeds the time-savings metrics. Click Done to skip —
+            you can add it later from <Link to="/runs">Run history</Link>.
+          </p>
+          <TimeSavedEditor
+            initial={null}
+            busy={savingTime}
+            dismissLabel="Done"
+            onSave={submitTimeSaved}
+            onDismiss={() => {
+              promptDismissedRef.current = true;
+              setTimeSavedPrompt(false);
+            }}
+          />
+        </div>
+      )}
 
       {approval && run.status === "waiting_approval" && (
         <ApprovalForm
