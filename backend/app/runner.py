@@ -16,6 +16,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 from sqlalchemy import select, update
 
+from .attachments import AttachmentContent
 from .config import get_settings
 from .db import SessionLocal
 from .events import bus
@@ -23,7 +24,7 @@ from .graph.builder import build_graph
 from .graph.nodes import AgentDef, RunContext, RunRejectedError
 from .graph.spec import GraphSpec, validate_graph
 from .llm import get_provider
-from .models import Agent, Artifact, Run, Workflow
+from .models import Agent, Artifact, Attachment, Run, Workflow
 
 TERMINAL_STATUSES = {"succeeded", "failed", "rejected", "cancelled"}
 
@@ -95,6 +96,9 @@ class RunManager:
                     raise ValueError("workflow no longer exists")
                 spec = validate_graph(workflow.graph)
                 agents = await _load_agents(session, spec)
+                run_attachments = await _load_attachments(
+                    session, run_id=run_id
+                )
                 repo_path = validate_repo_path(str(run.input.get("repo_path", "")))
                 thread_id = run.thread_id
                 task_text = str(run.input.get("task", ""))
@@ -106,6 +110,7 @@ class RunManager:
                 provider=get_provider(),
                 bus=bus,
                 session_factory=SessionLocal,
+                run_attachments=run_attachments,
             )
 
             await _set_status(run_id, "running")
@@ -200,6 +205,7 @@ async def _load_agents(session: Any, spec: GraphSpec) -> dict[int, AgentDef]:
             max_tokens=a.max_tokens,
             tools=list(a.tools or []),
             require_approval=a.require_approval,
+            attachments=await _load_attachments(session, agent_id=a.id),
         )
         for a in rows
     }
@@ -207,6 +213,23 @@ async def _load_agents(session: Any, spec: GraphSpec) -> dict[int, AgentDef]:
     if missing:
         raise ValueError(f"workflow references missing agents: {sorted(missing)}")
     return found
+
+
+async def _load_attachments(
+    session: Any, *, run_id: int | None = None, agent_id: int | None = None
+) -> list[AttachmentContent]:
+    query = select(Attachment).order_by(Attachment.id)
+    if run_id is not None:
+        query = query.where(Attachment.run_id == run_id)
+    else:
+        query = query.where(Attachment.agent_id == agent_id)
+    rows = (await session.execute(query)).scalars().all()
+    return [
+        AttachmentContent(
+            filename=a.filename, mime_type=a.mime_type, kind=a.kind, data=a.data
+        )
+        for a in rows
+    ]
 
 
 async def _set_status(

@@ -125,6 +125,11 @@ export default function RunDetailPage() {
         repo: {run.input.repo_path} · task: {run.input.task || "(none)"} · tokens:{" "}
         {run.total_input_tokens} in / {run.total_output_tokens} out · time saved:{" "}
         {formatTimeSaved(run.time_saved_minutes)}
+        {run.attachments && run.attachments.length > 0 && (
+          <>
+            {" "}· attachments: {run.attachments.map((a) => a.filename).join(", ")}
+          </>
+        )}
       </p>
 
       {timeSavedPrompt && (

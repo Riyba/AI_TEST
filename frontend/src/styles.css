@@ -212,6 +212,14 @@ details.raw summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .tool-check-list .tool-chip.on { border-color: var(--accent); color: var(--accent); }
 .tool-check-list .tool-chip.mutating.on { border-color: var(--red); color: var(--red); }
 
+.attachments { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.attachment-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 13px;
+}
+.attachment-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-row button { padding: 1px 7px; font-size: 12px; }
+
 /* time saved */
 .time-saved-prompt {
   border: 1px solid var(--accent);

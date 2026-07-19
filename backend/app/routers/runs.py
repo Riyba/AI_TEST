@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from ..db import SessionLocal, get_session
 from ..events import bus
-from ..models import Run, Workflow
+from ..models import Attachment, Run, Workflow
 from ..runner import TERMINAL_STATUSES, run_manager, validate_repo_path
 from ..schemas import ApprovalDecision, RunCreate, RunDetail, RunOut, TimeSavedIn
 
@@ -32,6 +32,28 @@ async def create_run(
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
+    attachments: list[Attachment] = []
+    if payload.attachment_ids:
+        rows = (
+            (
+                await session.execute(
+                    select(Attachment).where(
+                        Attachment.id.in_(payload.attachment_ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        found = {a.id for a in rows}
+        missing = set(payload.attachment_ids) - found
+        if missing:
+            raise HTTPException(422, f"unknown attachments: {sorted(missing)}")
+        claimed = [a for a in rows if a.agent_id is None and a.run_id is None]
+        if len(claimed) != len(rows):
+            raise HTTPException(422, "attachment already belongs to an agent or run")
+        attachments = claimed
+
     run = Run(
         workflow_id=workflow.id,
         workflow_name=workflow.name,
@@ -40,6 +62,9 @@ async def create_run(
         thread_id=uuid.uuid4().hex,
     )
     session.add(run)
+    await session.flush()
+    for attachment in attachments:
+        attachment.run_id = run.id
     await session.commit()
     await session.refresh(run)
 
@@ -63,7 +88,11 @@ async def get_run(run_id: int, session: AsyncSession = Depends(get_session)) -> 
         await session.execute(
             select(Run)
             .where(Run.id == run_id)
-            .options(selectinload(Run.steps), selectinload(Run.artifacts))
+            .options(
+                selectinload(Run.steps),
+                selectinload(Run.artifacts),
+                selectinload(Run.attachments),
+            )
         )
     ).scalar_one_or_none()
     if run is None:

@@ -52,6 +52,17 @@ export interface Agent {
 
 export type AgentInput = Omit<Agent, "id" | "is_template" | "created_at" | "updated_at">;
 
+export interface Attachment {
+  id: number;
+  agent_id: number | null;
+  run_id: number | null;
+  filename: string;
+  mime_type: string;
+  kind: "image" | "pdf" | "text";
+  size_bytes: number;
+  created_at: string;
+}
+
 export interface Workflow {
   id: number;
   name: string;
@@ -161,6 +172,7 @@ export interface RunArtifact {
 export interface RunDetail extends Run {
   steps: RunStep[];
   artifacts: RunArtifact[];
+  attachments: Attachment[];
 }
 
 export interface RunEvent {

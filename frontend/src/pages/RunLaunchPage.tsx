@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { Meta, Workflow } from "../types";
+import AttachmentsEditor from "../components/AttachmentsEditor";
+import type { Attachment, Meta, Workflow } from "../types";
 
 export default function RunLaunchPage() {
   const [params] = useSearchParams();
@@ -12,6 +13,7 @@ export default function RunLaunchPage() {
     params.get("workflow") ? Number(params.get("workflow")) : "",
   );
   const [task, setTask] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [repoPath, setRepoPath] = useState(localStorage.getItem("lastRepoPath") ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,6 +33,7 @@ export default function RunLaunchPage() {
         workflow_id: workflowId,
         task,
         repo_path: repoPath,
+        attachment_ids: attachments.map((a) => a.id),
       });
       navigate(`/runs/${run.id}`);
     } catch (e) {
@@ -77,6 +80,12 @@ export default function RunLaunchPage() {
           onChange={(e) => setTask(e.target.value)}
           placeholder="e.g. Generate tests for src/utils/parser.py"
         />
+
+        <label>
+          Attachments (given to every agent in this run — images, PDFs, or text
+          files, 5 MB max each)
+        </label>
+        <AttachmentsEditor onChange={setAttachments} />
 
         <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
           <button

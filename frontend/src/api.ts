@@ -1,6 +1,7 @@
 import type {
   Agent,
   AgentInput,
+  Attachment,
   GraphSpec,
   Meta,
   Metrics,
@@ -29,8 +30,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function requestForm<T>(path: string, form: FormData): Promise<T> {
+  // No Content-Type header — the browser sets the multipart boundary itself.
+  const res = await fetch(path, { method: "POST", body: form });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      if (typeof body.detail === "string") detail = body.detail;
+      else if (body.detail) detail = JSON.stringify(body.detail);
+    } catch {
+      /* keep statusText */
+    }
+    throw new Error(detail);
+  }
+  return (await res.json()) as T;
+}
+
 export const api = {
   meta: () => request<Meta>("/api/meta"),
+
+  uploadAttachment: (file: File, agentId?: number) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (agentId !== undefined) form.append("agent_id", String(agentId));
+    return requestForm<Attachment>("/api/attachments", form);
+  },
+  listAttachments: (agentId: number) =>
+    request<Attachment[]>(`/api/attachments?agent_id=${agentId}`),
+  deleteAttachment: (id: number) =>
+    request<void>(`/api/attachments/${id}`, { method: "DELETE" }),
 
   listAgents: () => request<Agent[]>("/api/agents"),
   createAgent: (a: AgentInput) =>
@@ -59,7 +88,12 @@ export const api = {
 
   listRuns: () => request<Run[]>("/api/runs"),
   getRun: (id: number) => request<RunDetail>(`/api/runs/${id}`),
-  createRun: (payload: { workflow_id: number; task: string; repo_path: string }) =>
+  createRun: (payload: {
+    workflow_id: number;
+    task: string;
+    repo_path: string;
+    attachment_ids?: number[];
+  }) =>
     request<Run>("/api/runs", { method: "POST", body: JSON.stringify(payload) }),
   submitApproval: (
     id: number,

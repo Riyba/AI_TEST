@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .db import SessionLocal, engine
 from .db import Base
-from .routers import agents, meta, metrics, runs, workflows
+from .routers import agents, attachments, meta, metrics, runs, workflows
 from .templates import seed_templates
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
@@ -45,6 +45,7 @@ app.add_middleware(
 )
 
 app.include_router(agents.router)
+app.include_router(attachments.router)
 app.include_router(workflows.router)
 app.include_router(runs.router)
 app.include_router(meta.router)

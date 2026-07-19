@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import AttachmentsEditor from "../components/AttachmentsEditor";
 import type { Agent, AgentInput, Meta } from "../types";
 
 const EMPTY: AgentInput = {
@@ -29,6 +30,8 @@ const FIELD_HELP = {
     "What the agent is allowed to do, like reading files or checking git history. Give it only what it needs. Items marked ⚠ can change files on your computer.",
   safe_mode:
     "When on, the agent can never change files on its own — any change (marked ⚠) must first be approved by you in the workflow. Recommended unless you fully trust the agent.",
+  attachments:
+    "Files the agent gets to read on every run — style guides, specs, reference docs, screenshots. Images, PDFs, and text files up to 5 MB each.",
 };
 
 function Info({ text }: { text: string }) {
@@ -167,6 +170,16 @@ export default function AgentsPage() {
                   );
                 })}
               </div>
+            </div>
+            <div className="full">
+              <label>Attachments <Info text={FIELD_HELP.attachments} /></label>
+              {editing.id === null ? (
+                <p className="muted small" style={{ margin: "4px 0" }}>
+                  Save the agent first, then edit it to attach files.
+                </p>
+              ) : (
+                <AttachmentsEditor agentId={editing.id} />
+              )}
             </div>
             <div className="full checkbox-row">
               <input

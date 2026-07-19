@@ -41,10 +41,25 @@ class WorkflowOut(WorkflowIn):
     updated_at: datetime
 
 
+class AttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    agent_id: int | None = None
+    run_id: int | None = None
+    filename: str
+    mime_type: str
+    kind: str
+    size_bytes: int
+    created_at: datetime
+
+
 class RunCreate(BaseModel):
     workflow_id: int
     task: str = ""
     repo_path: str
+    # IDs of staged attachments (uploaded via POST /api/attachments with no
+    # owner) to attach to this run.
+    attachment_ids: list[int] = Field(default_factory=list)
 
 
 class RunOut(BaseModel):
@@ -92,6 +107,7 @@ class ArtifactOut(BaseModel):
 class RunDetail(RunOut):
     steps: list[StepOut] = Field(default_factory=list)
     artifacts: list[ArtifactOut] = Field(default_factory=list)
+    attachments: list[AttachmentOut] = Field(default_factory=list)
 
 
 class TimeSavedIn(BaseModel):

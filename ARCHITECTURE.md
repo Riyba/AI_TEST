@@ -26,6 +26,10 @@ FastAPI routers ── runner.RunManager ── LangGraph StateGraph
 - **run_steps** — one row per executed node: input, output, tool-call log,
   per-step token usage, timestamps. This is the durable trace used for replay.
 - **artifacts** — files written by tools, plus the run's `final_output` text.
+- **attachments** — uploaded files (image/pdf/text, ≤5 MB, blob stored in the
+  row) owned by an agent (sent on every run), by a run (attached at launch), or
+  by neither yet ("staged": uploaded from the launch form, claimed by
+  `POST /api/runs` via `attachment_ids`; stale staged rows are just orphans).
 
 Schema changes: Alembic (`backend/alembic/`), initial revision auto-generated from
 the models. At startup `create_all` covers the fresh-install case.
@@ -73,7 +77,10 @@ All nodes share one `WorkflowState` (`app/graph/state.py`): `task`, `repo_path`,
 ### Node semantics
 
 - **agent** — builds the system prompt from the Agent row, renders the node's
-  prompt template, then runs a bounded tool-use loop against the Anthropic API:
+  prompt template, and prepends run + agent attachments to the first user
+  message as content blocks (`app/attachments.py`: images/PDFs as base64
+  blocks, text inlined), then runs a bounded tool-use loop against the
+  Anthropic API:
   the model's `tool_use` blocks are dispatched to the registry, results are fed
   back, until the model stops calling tools (or `MAX_TOOL_ITERATIONS`). The
   agent's permitted toolset excludes mutating tools when `require_approval` is on.

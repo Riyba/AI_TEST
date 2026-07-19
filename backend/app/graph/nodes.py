@@ -18,6 +18,7 @@ from typing import Any
 from langgraph.types import interrupt
 from sqlalchemy import update
 
+from ..attachments import AttachmentContent, to_content_blocks
 from ..events import RunEventBus
 from ..llm import LLMProvider
 from ..models import Artifact, Run, RunStep
@@ -41,6 +42,8 @@ class AgentDef:
     max_tokens: int
     tools: list[str]
     require_approval: bool
+    # Files attached to this agent; included in every run.
+    attachments: list[AttachmentContent] = field(default_factory=list)
 
 
 @dataclass
@@ -52,6 +55,8 @@ class RunContext:
     bus: RunEventBus
     session_factory: Any  # async_sessionmaker
     node_names: dict[str, str] = field(default_factory=dict)
+    # Files attached when the run was launched; given to every agent node.
+    run_attachments: list[AttachmentContent] = field(default_factory=list)
 
     # -- persistence helpers -------------------------------------------------
 
@@ -177,11 +182,18 @@ def make_agent_node(node: NodeSpec, ctx: RunContext):
         tools = tool_schemas_for(
             agent.tools, include_mutating=not agent.require_approval
         )
-        step_id = await ctx.start_step(
-            node, {"prompt": prompt, "model": agent.model, "agent": agent.name}
-        )
+        attachments = ctx.run_attachments + agent.attachments
+        step_input = {"prompt": prompt, "model": agent.model, "agent": agent.name}
+        if attachments:
+            step_input["attachments"] = [a.filename for a in attachments]
+        step_id = await ctx.start_step(node, step_input)
 
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+        content: Any = prompt
+        if attachments:
+            content = to_content_blocks(attachments) + [
+                {"type": "text", "text": prompt}
+            ]
+        messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
         tool_call_log: list[dict[str, Any]] = []
         total_in = total_out = 0
         text = ""

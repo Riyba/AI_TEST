@@ -5,7 +5,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -37,6 +46,10 @@ class Agent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    attachments: Mapped[list[Attachment]] = relationship(
+        back_populates="agent", cascade="all, delete-orphan", order_by="Attachment.id"
     )
 
 
@@ -85,6 +98,9 @@ class Run(Base):
     artifacts: Mapped[list[Artifact]] = relationship(
         back_populates="run", cascade="all, delete-orphan", order_by="Artifact.id"
     )
+    attachments: Mapped[list[Attachment]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="Attachment.id"
+    )
 
 
 class RunStep(Base):
@@ -124,3 +140,27 @@ class Artifact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     run: Mapped[Run] = relationship(back_populates="artifacts")
+
+
+class Attachment(Base):
+    """An uploaded file, owned by an agent (included in every run of that
+    agent), by a run (attached at launch), or by neither yet ("staged" —
+    uploaded from the run-launch form and claimed when the run is created)."""
+
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    agent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agents.id"), nullable=True
+    )
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True)
+    filename: Mapped[str] = mapped_column(String(300))
+    mime_type: Mapped[str] = mapped_column(String(100), default="")
+    # image | pdf | text — decides how the file is presented to the LLM.
+    kind: Mapped[str] = mapped_column(String(20), default="text")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    data: Mapped[bytes] = mapped_column(LargeBinary, default=b"")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    agent: Mapped[Agent | None] = relationship(back_populates="attachments")
+    run: Mapped[Run | None] = relationship(back_populates="attachments")
