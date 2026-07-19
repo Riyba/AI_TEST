@@ -28,6 +28,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "judging. Be specific — cite file and line. Order findings by severity."
         ),
         "model": "claude-sonnet-5",
+        "max_turns": 15,
+        "max_tokens": 150_000,
         "tools": READ_TOOLS + GIT_READ_TOOLS,
     },
     {
@@ -41,6 +43,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "no markdown fences, no commentary."
         ),
         "model": "claude-sonnet-5",
+        "max_turns": 12,
+        "max_tokens": 120_000,
         "tools": READ_TOOLS,
     },
     {
@@ -53,6 +57,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "Risks/rollback. Be accurate — only describe what the diff shows."
         ),
         "model": "claude-sonnet-5",
+        "max_turns": 8,
+        "max_tokens": 80_000,
         "tools": ["read_file", "git_diff", "git_log"],
     },
     {
@@ -68,6 +74,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "knowledge, and say so explicitly."
         ),
         "model": "claude-sonnet-5",
+        "max_turns": 12,
+        "max_tokens": 120_000,
         "tools": READ_TOOLS,
     },
     {
@@ -81,6 +89,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "refactored code. NEVER apply changes — advice only."
         ),
         "model": "claude-sonnet-5",
+        "max_turns": 12,
+        "max_tokens": 120_000,
         "tools": READ_TOOLS,
     },
     {
@@ -93,6 +103,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "with your tools as needed."
         ),
         "model": "claude-sonnet-5",
+        "max_turns": 12,
+        "max_tokens": 120_000,
         "tools": READ_TOOLS,
     },
     {
@@ -101,6 +113,8 @@ AGENT_SEEDS: list[dict[str, Any]] = [
         "role": "Fast, cheap summarizer",
         "system_prompt": "Summarize the provided content concisely for a developer audience.",
         "model": "claude-haiku-4-5",
+        "max_turns": 2,
+        "max_tokens": 20_000,
         "tools": [],
     },
 ]
@@ -273,6 +287,8 @@ async def seed_templates(session: AsyncSession) -> None:
             role=seed["role"],
             system_prompt=seed["system_prompt"],
             model=seed["model"],
+            max_turns=seed["max_turns"],
+            max_tokens=seed["max_tokens"],
             tools=seed["tools"],
             require_approval=True,
             is_template=True,

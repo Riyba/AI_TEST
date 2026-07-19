@@ -196,7 +196,8 @@ async def _load_agents(session: Any, spec: GraphSpec) -> dict[int, AgentDef]:
             role=a.role,
             system_prompt=a.system_prompt,
             model=a.model,
-            temperature=a.temperature,
+            max_turns=a.max_turns,
+            max_tokens=a.max_tokens,
             tools=list(a.tools or []),
             require_approval=a.require_approval,
         )

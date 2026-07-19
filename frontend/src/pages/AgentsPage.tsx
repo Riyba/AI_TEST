@@ -7,10 +7,37 @@ const EMPTY: AgentInput = {
   role: "",
   system_prompt: "",
   model: "claude-sonnet-5",
-  temperature: null,
+  max_turns: 10,
+  max_tokens: 100_000,
   tools: [],
   require_approval: true,
 };
+
+const FIELD_HELP = {
+  name: "A short label so you can recognize this agent in lists and workflows.",
+  model:
+    "Which AI model the agent uses — its \"brain\". Smarter models give better results but are slower and cost more; smaller ones are fast and cheap. Pick a suggestion or type a model name.",
+  role:
+    "One sentence describing who the agent should act as, e.g. \"a careful senior engineer\". This shapes the tone and focus of everything it writes.",
+  system_prompt:
+    "The agent's standing instructions, followed on every run. Describe what it should do, how to present results, and anything it must never do.",
+  max_turns:
+    "How many back-and-forth steps the agent may take in one run. Each step is one \"thought\", possibly using a tool. More steps let it dig deeper, but take longer and cost more. 10 is a good starting point.",
+  max_tokens:
+    "A budget for how much text the agent may read and write in one run, measured in tokens (a token is roughly three-quarters of a word — it's what you pay for). The agent stops early if it hits this limit. 100,000 is a good starting point.",
+  tools:
+    "What the agent is allowed to do, like reading files or checking git history. Give it only what it needs. Items marked ⚠ can change files on your computer.",
+  safe_mode:
+    "When on, the agent can never change files on its own — any change (marked ⚠) must first be approved by you in the workflow. Recommended unless you fully trust the agent.",
+};
+
+function Info({ text }: { text: string }) {
+  return (
+    <span className="info-icon" tabIndex={0} aria-label={text}>
+      i<span className="info-tip" role="tooltip">{text}</span>
+    </span>
+  );
+}
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -67,11 +94,11 @@ export default function AgentsPage() {
           <h3 style={{ marginTop: 0 }}>{editing.id === null ? "New agent" : "Edit agent"}</h3>
           <div className="form-grid">
             <div>
-              <label>Name</label>
+              <label>Name <Info text={FIELD_HELP.name} /></label>
               <input value={editing.data.name} onChange={(e) => set({ name: e.target.value })} />
             </div>
             <div>
-              <label>Model</label>
+              <label>Model <Info text={FIELD_HELP.model} /></label>
               <input
                 value={editing.data.model}
                 onChange={(e) => set({ model: e.target.value })}
@@ -85,7 +112,7 @@ export default function AgentsPage() {
               </datalist>
             </div>
             <div className="full">
-              <label>Role / persona</label>
+              <label>Role / persona <Info text={FIELD_HELP.role} /></label>
               <input
                 value={editing.data.role}
                 onChange={(e) => set({ role: e.target.value })}
@@ -93,7 +120,7 @@ export default function AgentsPage() {
               />
             </div>
             <div className="full">
-              <label>System prompt</label>
+              <label>System prompt <Info text={FIELD_HELP.system_prompt} /></label>
               <textarea
                 rows={6}
                 value={editing.data.system_prompt}
@@ -101,17 +128,23 @@ export default function AgentsPage() {
               />
             </div>
             <div>
-              <label>Temperature (only honored on models that accept sampling params)</label>
+              <label>Max turns per run <Info text={FIELD_HELP.max_turns} /></label>
               <input
-                type="number" min={0} max={1} step={0.1}
-                value={editing.data.temperature ?? ""}
-                onChange={(e) =>
-                  set({ temperature: e.target.value === "" ? null : Number(e.target.value) })
-                }
+                type="number" min={1} max={100} step={1}
+                value={editing.data.max_turns}
+                onChange={(e) => set({ max_turns: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label>Max tokens per run <Info text={FIELD_HELP.max_tokens} /></label>
+              <input
+                type="number" min={1000} max={10_000_000} step={1000}
+                value={editing.data.max_tokens}
+                onChange={(e) => set({ max_tokens: Number(e.target.value) })}
               />
             </div>
             <div className="full">
-              <label>Tool permissions</label>
+              <label>Tool permissions <Info text={FIELD_HELP.tools} /></label>
               <div className="tool-check-list">
                 {(meta?.tools ?? []).map((tool) => {
                   const on = editing.data.tools.includes(tool.name);
@@ -142,13 +175,21 @@ export default function AgentsPage() {
                 onChange={(e) => set({ require_approval: e.target.checked })}
               />
               <label htmlFor="reqappr">
-                Safe mode: exclude mutating tools (⚠) from this agent's autonomous tool loop.
-                Mutations then only happen via approval-gated workflow tool nodes.
+                Safe mode: the agent can't make changes on its own — anything marked ⚠ needs
+                your approval first. <Info text={FIELD_HELP.safe_mode} />
               </label>
             </div>
           </div>
           <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
-            <button className="primary" onClick={save} disabled={!editing.data.name.trim()}>
+            <button
+              className="primary"
+              onClick={save}
+              disabled={
+                !editing.data.name.trim() ||
+                editing.data.max_turns < 1 ||
+                editing.data.max_tokens < 1000
+              }
+            >
               Save
             </button>
             <button onClick={() => setEditing(null)}>Cancel</button>
@@ -166,6 +207,7 @@ export default function AgentsPage() {
               </h4>
               <p>
                 {agent.model} · tools: {agent.tools.length ? agent.tools.join(", ") : "none"} ·{" "}
+                {agent.max_turns} turns · {agent.max_tokens.toLocaleString()} tokens ·{" "}
                 {agent.require_approval ? "safe mode" : "autonomous mutations"}
               </p>
             </div>
@@ -178,7 +220,8 @@ export default function AgentsPage() {
                     role: agent.role,
                     system_prompt: agent.system_prompt,
                     model: agent.model,
-                    temperature: agent.temperature,
+                    max_turns: agent.max_turns,
+                    max_tokens: agent.max_tokens,
                     tools: agent.tools,
                     require_approval: agent.require_approval,
                   },

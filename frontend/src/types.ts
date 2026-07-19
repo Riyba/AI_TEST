@@ -41,7 +41,8 @@ export interface Agent {
   role: string;
   system_prompt: string;
   model: string;
-  temperature: number | null;
+  max_turns: number;
+  max_tokens: number;
   tools: string[];
   require_approval: boolean;
   is_template: boolean;

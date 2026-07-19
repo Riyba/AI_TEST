@@ -31,8 +31,6 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
-    # Hard cap on agent tool-use loop iterations per node.
-    max_tool_iterations: int = 10
     # Default max_tokens per LLM call.
     llm_max_tokens: int = 8192
 

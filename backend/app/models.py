@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -23,8 +23,11 @@ class Agent(Base):
     role: Mapped[str] = mapped_column(String(500), default="")
     system_prompt: Mapped[str] = mapped_column(Text, default="")
     model: Mapped[str] = mapped_column(String(100), default="claude-sonnet-5")
-    # Temperature is only honored on models that still accept sampling params.
-    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Cap on think/act turns in this agent's tool-use loop, per run.
+    max_turns: Mapped[int] = mapped_column(Integer, default=10)
+    # Token budget (input + output) for this agent per run; the loop stops
+    # once the budget is spent.
+    max_tokens: Mapped[int] = mapped_column(Integer, default=100_000)
     # List of tool names this agent may call in its tool-use loop.
     tools: Mapped[list[str]] = mapped_column(JSON, default=list)
     # When True (default), mutating tools are excluded from the agent's

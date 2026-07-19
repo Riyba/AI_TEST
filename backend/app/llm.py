@@ -23,10 +23,6 @@ AVAILABLE_MODELS = [
     "claude-haiku-4-5",
 ]
 
-# Opus 4.8 and Sonnet 5 reject non-default sampling params (400); only pass
-# temperature on models that still accept it.
-SAMPLING_PARAM_MODELS = {"claude-sonnet-4-6", "claude-haiku-4-5"}
-
 
 @dataclass
 class ToolCall:
@@ -53,7 +49,6 @@ class LLMProvider(Protocol):
         system: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> LLMResponse: ...
 
@@ -75,7 +70,6 @@ class AnthropicProvider:
         system: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> LLMResponse:
         kwargs: dict[str, Any] = {
@@ -86,8 +80,6 @@ class AnthropicProvider:
         }
         if tools:
             kwargs["tools"] = tools
-        if temperature is not None and model in SAMPLING_PARAM_MODELS:
-            kwargs["temperature"] = temperature
 
         response = await self._client.messages.create(**kwargs)
 

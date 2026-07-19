@@ -16,8 +16,8 @@ FastAPI routers ── runner.RunManager ── LangGraph StateGraph
 
 ## Data model (SQLite, `backend/data/app.db`)
 
-- **agents** — name, role, system prompt, model, temperature, tool permissions,
-  `require_approval` (safe mode).
+- **agents** — name, role, system prompt, model, per-run limits (`max_turns`,
+  `max_tokens`), tool permissions, `require_approval` (safe mode).
 - **workflows** — a `graph` JSON column holding the GraphSpec below. `is_template`
   marks seeded starters; cloning copies the graph.
 - **runs** — status, input (`task`, `repo_path`), `thread_id` (checkpointer key),
@@ -144,9 +144,9 @@ Anthropic tool definition), a `mutating` flag, and a sync handler run via
 `LLMProvider` is a one-method protocol (`complete(...) -> LLMResponse`);
 `AnthropicProvider` is the default implementation. Swapping providers means
 implementing that protocol — graph code never touches an SDK type beyond the
-opaque `raw_content` it echoes back for tool loops. Per-model quirk handled here:
-Opus 4.8 / Sonnet 5 reject sampling params, so `temperature` is only forwarded to
-models that accept it.
+opaque `raw_content` it echoes back for tool loops. Per-agent run limits are
+enforced in the agent node loop (`app/graph/nodes.py`): `max_turns` caps loop
+iterations and `max_tokens` is an input+output token budget per run.
 
 ## Frontend
 

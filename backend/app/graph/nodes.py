@@ -18,7 +18,6 @@ from typing import Any
 from langgraph.types import interrupt
 from sqlalchemy import update
 
-from ..config import get_settings
 from ..events import RunEventBus
 from ..llm import LLMProvider
 from ..models import Artifact, Run, RunStep
@@ -38,7 +37,8 @@ class AgentDef:
     role: str
     system_prompt: str
     model: str
-    temperature: float | None
+    max_turns: int
+    max_tokens: int
     tools: list[str]
     require_approval: bool
 
@@ -164,7 +164,6 @@ def render(template: str, state: WorkflowState) -> str:
 
 def make_agent_node(node: NodeSpec, ctx: RunContext):
     agent = ctx.agents[node.agent_id or 0]
-    settings = get_settings()
 
     async def run_agent(state: WorkflowState) -> dict[str, Any]:
         prompt = render(node.prompt or "{task}", state)
@@ -187,13 +186,12 @@ def make_agent_node(node: NodeSpec, ctx: RunContext):
         total_in = total_out = 0
         text = ""
         try:
-            for _ in range(settings.max_tool_iterations):
+            for _ in range(max(1, agent.max_turns)):
                 response = await ctx.provider.complete(
                     model=agent.model,
                     system=system,
                     messages=messages,
                     tools=tools or None,
-                    temperature=agent.temperature,
                 )
                 total_in += response.input_tokens
                 total_out += response.output_tokens
@@ -207,6 +205,11 @@ def make_agent_node(node: NodeSpec, ctx: RunContext):
                 )
                 text = response.text
                 if response.stop_reason != "tool_use" or not response.tool_calls:
+                    break
+                if total_in + total_out >= agent.max_tokens:
+                    text = (text + "\n\n" if text else "") + (
+                        "(agent stopped early: reached its token limit for this run)"
+                    )
                     break
                 messages.append({"role": "assistant", "content": response.raw_content})
                 results: list[dict[str, Any]] = []
@@ -252,7 +255,7 @@ def make_agent_node(node: NodeSpec, ctx: RunContext):
                     )
                 messages.append({"role": "user", "content": results})
             else:
-                text = text or "(agent reached the tool-iteration limit)"
+                text = text or "(agent reached its turn limit for this run)"
         except Exception:
             await ctx.finish_step(
                 step_id, node, status="failed", output={"error": "agent step failed"},

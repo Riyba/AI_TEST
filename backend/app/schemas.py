@@ -13,7 +13,8 @@ class AgentIn(BaseModel):
     role: str = ""
     system_prompt: str = ""
     model: str = "claude-sonnet-5"
-    temperature: float | None = Field(default=None, ge=0, le=1)
+    max_turns: int = Field(default=10, ge=1, le=100)
+    max_tokens: int = Field(default=100_000, ge=1_000, le=10_000_000)
     tools: list[str] = Field(default_factory=list)
     require_approval: bool = True
 
