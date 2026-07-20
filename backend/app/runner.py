@@ -189,7 +189,12 @@ class RunManager:
 
 
 async def _load_agents(session: Any, spec: GraphSpec) -> dict[int, AgentDef]:
-    agent_ids = {n.agent_id for n in spec.nodes if n.type == "agent" and n.agent_id}
+    agent_ids: set[int] = set()
+    for n in spec.nodes:
+        if n.type in ("agent", "orchestrator") and n.agent_id:
+            agent_ids.add(n.agent_id)
+        if n.type == "orchestrator":
+            agent_ids.update(tid for tid in n.team if tid)
     if not agent_ids:
         return {}
     rows = (

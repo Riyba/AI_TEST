@@ -117,6 +117,24 @@ AGENT_SEEDS: list[dict[str, Any]] = [
         "max_tokens": 20_000,
         "tools": [],
     },
+    {
+        "key": "orchestrator",
+        "name": "SDLC Orchestrator",
+        "role": "Routes software-development requests to specialist agents",
+        "system_prompt": (
+            "You are the front door for an SDLC agent team. Read the user's request, "
+            "decide which specialist agent is the right one to handle it, and delegate "
+            "with a clear, self-contained instruction. If the request has several "
+            "distinct parts, delegate each to the appropriate agent in turn. After the "
+            "specialists respond, synthesize a single, coherent answer for the user — "
+            "attribute which agent produced which part when it helps. Do not attempt "
+            "the specialist work yourself."
+        ),
+        "model": "claude-sonnet-5",
+        "max_turns": 12,
+        "max_tokens": 150_000,
+        "tools": [],
+    },
 ]
 
 
@@ -244,6 +262,29 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                             "Locate and read every manifest/lock file, then report findings "
                             "grouped by severity."
                         ),
+                    ),
+                ],
+                "edges": [],
+            },
+        },
+        {
+            "name": "SDLC Orchestrator",
+            "description": "One entry point that routes your request to the right specialist agent (reviewer, test writer, PR writer, dependency auditor, refactor advisor, or debugger) and synthesizes the result — the agents-as-tools pattern.",
+            "graph": {
+                "entry": "route",
+                "nodes": [
+                    _node(
+                        "route", "orchestrator", "Route to specialist", 0, 120,
+                        agent_id=agent_ids["orchestrator"],
+                        team=[
+                            agent_ids["reviewer"],
+                            agent_ids["test_writer"],
+                            agent_ids["pr_writer"],
+                            agent_ids["dep_auditor"],
+                            agent_ids["refactor_advisor"],
+                            agent_ids["debugger"],
+                        ],
+                        prompt="{task}",
                     ),
                 ],
                 "edges": [],

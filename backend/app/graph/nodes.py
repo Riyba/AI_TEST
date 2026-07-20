@@ -10,6 +10,7 @@ dedicated tool node whose approval interrupt is the first thing it does.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -164,6 +165,143 @@ def render(template: str, state: WorkflowState) -> str:
     return template.format_map(mapping)
 
 
+# -- agent tool-use loop (shared by agent + orchestrator nodes) ----------------
+
+
+@dataclass
+class AgentLoopResult:
+    text: str
+    input_tokens: int
+    output_tokens: int
+    tool_calls: list[dict[str, Any]]
+
+
+def build_agent_system(agent: AgentDef, repo_path: str) -> str:
+    system = agent.system_prompt
+    if agent.role:
+        system = f"Role: {agent.role}\n\n{system}".strip()
+    system += (
+        f"\n\nYou are working inside the repository at: {repo_path}"
+        "\nUse relative paths with your tools."
+    )
+    return system
+
+
+async def run_agent_loop(
+    agent: AgentDef,
+    ctx: RunContext,
+    *,
+    event_node_id: str,
+    prompt: str,
+    attachments: list[AttachmentContent],
+    extra_tools: list[dict[str, Any]] | None = None,
+    extra_dispatch: dict[str, Any] | None = None,
+) -> AgentLoopResult:
+    """Run one agent's bounded tool-use loop and return its result.
+
+    `extra_tools`/`extra_dispatch` let a caller inject synthetic tools (e.g. an
+    orchestrator's per-agent delegation tools): any tool call whose name is in
+    `extra_dispatch` is handled by the given async callable `(input) -> (success,
+    output)` instead of the registry. Events and token usage are emitted under
+    `event_node_id`.
+    """
+    system = build_agent_system(agent, str(ctx.repo_path))
+    tools = tool_schemas_for(agent.tools, include_mutating=not agent.require_approval)
+    if extra_tools:
+        tools = tools + extra_tools
+    dispatch = extra_dispatch or {}
+
+    content: Any = prompt
+    if attachments:
+        content = to_content_blocks(attachments) + [{"type": "text", "text": prompt}]
+    messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
+    tool_call_log: list[dict[str, Any]] = []
+    total_in = total_out = 0
+    text = ""
+
+    for _ in range(max(1, agent.max_turns)):
+        response = await ctx.provider.complete(
+            model=agent.model,
+            system=system,
+            messages=messages,
+            tools=tools or None,
+        )
+        total_in += response.input_tokens
+        total_out += response.output_tokens
+        ctx.bus.emit(
+            ctx.run_id,
+            "llm_usage",
+            node_id=event_node_id,
+            model=agent.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+        )
+        text = response.text
+        if response.stop_reason != "tool_use" or not response.tool_calls:
+            break
+        if total_in + total_out >= agent.max_tokens:
+            text = (text + "\n\n" if text else "") + (
+                "(agent stopped early: reached its token limit for this run)"
+            )
+            break
+        messages.append({"role": "assistant", "content": response.raw_content})
+        results: list[dict[str, Any]] = []
+        for call in response.tool_calls:
+            ctx.bus.emit(
+                ctx.run_id,
+                "tool_call",
+                node_id=event_node_id,
+                tool=call.name,
+                params=call.input,
+            )
+            if call.name in dispatch:
+                success, output = await dispatch[call.name](call.input)
+            else:
+                res = await execute_tool(call.name, ctx.repo_path, call.input)
+                success, output = res.success, res.output
+                if call.name == "write_file" and success:
+                    await ctx.save_artifact(
+                        name=str(call.input.get("path", "file")),
+                        kind="file",
+                        content=str(call.input.get("content", "")),
+                        path=str(call.input.get("path", "")),
+                    )
+            ctx.bus.emit(
+                ctx.run_id,
+                "tool_result",
+                node_id=event_node_id,
+                tool=call.name,
+                success=success,
+                output=output[:4000],
+            )
+            tool_call_log.append(
+                {
+                    "tool": call.name,
+                    "params": call.input,
+                    "success": success,
+                    "output": output[:8000],
+                }
+            )
+            results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": call.id,
+                    "content": output[:50_000],
+                    **({} if success else {"is_error": True}),
+                }
+            )
+        messages.append({"role": "user", "content": results})
+    else:
+        text = text or "(agent reached its turn limit for this run)"
+
+    return AgentLoopResult(
+        text=text,
+        input_tokens=total_in,
+        output_tokens=total_out,
+        tool_calls=tool_call_log,
+    )
+
+
 # -- node factories -----------------------------------------------------------
 
 
@@ -172,106 +310,24 @@ def make_agent_node(node: NodeSpec, ctx: RunContext):
 
     async def run_agent(state: WorkflowState) -> dict[str, Any]:
         prompt = render(node.prompt or "{task}", state)
-        system = agent.system_prompt
-        if agent.role:
-            system = f"Role: {agent.role}\n\n{system}".strip()
-        system += (
-            f"\n\nYou are working inside the repository at: {state.get('repo_path', '')}"
-            "\nUse relative paths with your tools."
-        )
-        tools = tool_schemas_for(
-            agent.tools, include_mutating=not agent.require_approval
-        )
         attachments = ctx.run_attachments + agent.attachments
         step_input = {"prompt": prompt, "model": agent.model, "agent": agent.name}
         if attachments:
             step_input["attachments"] = [a.filename for a in attachments]
         step_id = await ctx.start_step(node, step_input)
 
-        content: Any = prompt
-        if attachments:
-            content = to_content_blocks(attachments) + [
-                {"type": "text", "text": prompt}
-            ]
-        messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
-        tool_call_log: list[dict[str, Any]] = []
-        total_in = total_out = 0
-        text = ""
         try:
-            for _ in range(max(1, agent.max_turns)):
-                response = await ctx.provider.complete(
-                    model=agent.model,
-                    system=system,
-                    messages=messages,
-                    tools=tools or None,
-                )
-                total_in += response.input_tokens
-                total_out += response.output_tokens
-                ctx.bus.emit(
-                    ctx.run_id,
-                    "llm_usage",
-                    node_id=node.id,
-                    model=agent.model,
-                    input_tokens=response.input_tokens,
-                    output_tokens=response.output_tokens,
-                )
-                text = response.text
-                if response.stop_reason != "tool_use" or not response.tool_calls:
-                    break
-                if total_in + total_out >= agent.max_tokens:
-                    text = (text + "\n\n" if text else "") + (
-                        "(agent stopped early: reached its token limit for this run)"
-                    )
-                    break
-                messages.append({"role": "assistant", "content": response.raw_content})
-                results: list[dict[str, Any]] = []
-                for call in response.tool_calls:
-                    ctx.bus.emit(
-                        ctx.run_id,
-                        "tool_call",
-                        node_id=node.id,
-                        tool=call.name,
-                        params=call.input,
-                    )
-                    result = await execute_tool(call.name, ctx.repo_path, call.input)
-                    ctx.bus.emit(
-                        ctx.run_id,
-                        "tool_result",
-                        node_id=node.id,
-                        tool=call.name,
-                        success=result.success,
-                        output=result.output[:4000],
-                    )
-                    tool_call_log.append(
-                        {
-                            "tool": call.name,
-                            "params": call.input,
-                            "success": result.success,
-                            "output": result.output[:8000],
-                        }
-                    )
-                    if call.name == "write_file" and result.success:
-                        await ctx.save_artifact(
-                            name=str(call.input.get("path", "file")),
-                            kind="file",
-                            content=str(call.input.get("content", "")),
-                            path=str(call.input.get("path", "")),
-                        )
-                    results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": call.id,
-                            "content": result.output[:50_000],
-                            **({} if result.success else {"is_error": True}),
-                        }
-                    )
-                messages.append({"role": "user", "content": results})
-            else:
-                text = text or "(agent reached its turn limit for this run)"
+            result = await run_agent_loop(
+                agent,
+                ctx,
+                event_node_id=node.id,
+                prompt=prompt,
+                attachments=attachments,
+            )
         except Exception:
             await ctx.finish_step(
                 step_id, node, status="failed", output={"error": "agent step failed"},
-                tool_calls=tool_call_log, input_tokens=total_in, output_tokens=total_out,
+                tool_calls=[],
             )
             raise
 
@@ -279,14 +335,172 @@ def make_agent_node(node: NodeSpec, ctx: RunContext):
             step_id,
             node,
             status="succeeded",
-            output={"text": text},
-            tool_calls=tool_call_log,
-            input_tokens=total_in,
-            output_tokens=total_out,
+            output={"text": result.text},
+            tool_calls=result.tool_calls,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
-        return {"node_outputs": {node.id: text}, "last_output": text}
+        return {"node_outputs": {node.id: result.text}, "last_output": result.text}
 
     return run_agent
+
+
+def _delegation_tool_name(agent: AgentDef, used: set[str]) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", agent.name.lower()).strip("_") or "agent"
+    name = f"delegate_to_{slug}"
+    if name in used:  # disambiguate same-named agents
+        name = f"{name}_{agent.id}"
+    used.add(name)
+    return name
+
+
+def make_orchestrator_node(node: NodeSpec, ctx: RunContext):
+    """Agents-as-tools: an LLM persona that delegates to a team of sub-agents.
+
+    Each team member is exposed to the orchestrator as a `delegate_to_<name>`
+    tool taking a free-text `request`. When the orchestrator calls it, that
+    sub-agent runs its own tool-use loop against the request and returns its
+    answer, which the orchestrator uses to decide what to do next (route to
+    another agent, or produce the final response).
+    """
+    persona = ctx.agents[node.agent_id or 0]
+    team = [ctx.agents[tid] for tid in node.team if tid in ctx.agents]
+
+    used_names: set[str] = set()
+    tool_names: dict[int, str] = {}
+    delegation_tools: list[dict[str, Any]] = []
+    for member in team:
+        tname = _delegation_tool_name(member, used_names)
+        tool_names[member.id] = tname
+        can_do = member.role or "handles software-development tasks"
+        toolset = ", ".join(member.tools) if member.tools else "no repository tools"
+        delegation_tools.append(
+            {
+                "name": tname,
+                "description": (
+                    f"Delegate a sub-task to the '{member.name}' agent. "
+                    f"{can_do}. Available tools: {toolset}. "
+                    "Give it a self-contained request describing exactly what you "
+                    "need; it cannot see this conversation."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "A complete, standalone instruction for the sub-agent.",
+                        }
+                    },
+                    "required": ["request"],
+                },
+            }
+        )
+
+    async def run_orchestrator(state: WorkflowState) -> dict[str, Any]:
+        prompt = render(node.prompt or "{task}", state)
+        roster = "\n".join(
+            f"- `{tool_names[m.id]}` → {m.name}: {m.role or 'general SDLC agent'}"
+            for m in team
+        )
+        routing_note = (
+            "\n\nYou are an orchestrator. You do not do the work yourself; you "
+            "route each request to the most appropriate specialist agent using the "
+            "delegation tools below, then combine their results into a final answer. "
+            "Choose the single best agent when one clearly fits; delegate to several "
+            "(sequentially) when a request has distinct parts. Available agents:\n"
+            f"{roster}"
+        )
+        orchestrator_persona = AgentDef(
+            id=persona.id,
+            name=persona.name,
+            role=persona.role,
+            system_prompt=persona.system_prompt + routing_note,
+            model=persona.model,
+            max_turns=persona.max_turns,
+            max_tokens=persona.max_tokens,
+            tools=persona.tools,
+            require_approval=persona.require_approval,
+            attachments=persona.attachments,
+        )
+
+        step_input = {"prompt": prompt, "model": persona.model, "agent": persona.name}
+        step_id = await ctx.start_step(node, step_input)
+
+        def make_dispatch(member: AgentDef):
+            async def dispatch(tool_input: dict[str, Any]) -> tuple[bool, str]:
+                request = str(tool_input.get("request", "")).strip()
+                sub_node = NodeSpec(
+                    id=f"{node.id}:{tool_names[member.id]}",
+                    type="agent",
+                    name=member.name,
+                )
+                sub_step_id = await ctx.start_step(
+                    sub_node,
+                    {
+                        "prompt": request,
+                        "model": member.model,
+                        "agent": member.name,
+                        "delegated_by": persona.name,
+                    },
+                )
+                try:
+                    sub = await run_agent_loop(
+                        member,
+                        ctx,
+                        event_node_id=node.id,
+                        prompt=request or "(no request provided)",
+                        attachments=member.attachments,
+                    )
+                except Exception:
+                    await ctx.finish_step(
+                        sub_step_id, sub_node, status="failed",
+                        output={"error": "sub-agent failed"},
+                    )
+                    return False, f"Sub-agent '{member.name}' failed."
+                await ctx.finish_step(
+                    sub_step_id,
+                    sub_node,
+                    status="succeeded",
+                    output={"text": sub.text},
+                    tool_calls=sub.tool_calls,
+                    input_tokens=sub.input_tokens,
+                    output_tokens=sub.output_tokens,
+                )
+                return True, sub.text
+
+            return dispatch
+
+        dispatch_map = {tool_names[m.id]: make_dispatch(m) for m in team}
+
+        try:
+            result = await run_agent_loop(
+                orchestrator_persona,
+                ctx,
+                event_node_id=node.id,
+                prompt=prompt,
+                attachments=ctx.run_attachments + persona.attachments,
+                extra_tools=delegation_tools,
+                extra_dispatch=dispatch_map,
+            )
+        except Exception:
+            await ctx.finish_step(
+                step_id, node, status="failed",
+                output={"error": "orchestrator step failed"}, tool_calls=[],
+            )
+            raise
+
+        await ctx.finish_step(
+            step_id,
+            node,
+            status="succeeded",
+            output={"text": result.text},
+            tool_calls=result.tool_calls,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        )
+        return {"node_outputs": {node.id: result.text}, "last_output": result.text}
+
+    return run_orchestrator
 
 
 def make_tool_node(node: NodeSpec, ctx: RunContext):

@@ -9,6 +9,7 @@ from .nodes import (
     make_agent_node,
     make_approval_node,
     make_condition_node,
+    make_orchestrator_node,
     make_tool_node,
     route_condition,
 )
@@ -17,6 +18,7 @@ from .state import WorkflowState
 
 _FACTORIES = {
     "agent": make_agent_node,
+    "orchestrator": make_orchestrator_node,
     "tool": make_tool_node,
     "condition": make_condition_node,
     "approval": make_approval_node,

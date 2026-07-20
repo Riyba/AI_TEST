@@ -2,11 +2,16 @@
 
 A workflow's `graph` column stores a GraphSpec. Node types:
 
-- agent:     runs an Agent (LLM + its permitted tools in a tool-use loop)
-- tool:      runs one registry tool with templated params; mutating tools
-             interrupt for human approval first (unless require_approval=false)
-- condition: routes to the `true` or `false` labeled edge based on a predicate
-- approval:  human-in-the-loop gate; pauses the run until approve/reject
+- agent:        runs an Agent (LLM + its permitted tools in a tool-use loop)
+- orchestrator: an Agent whose tools are *other agents* — the "agents-as-tools"
+                pattern. The orchestrator LLM is handed one delegation tool per
+                team member and decides which sub-agent(s) should handle the
+                request; each delegated call runs that sub-agent's own tool-use
+                loop and returns its answer to the orchestrator.
+- tool:         runs one registry tool with templated params; mutating tools
+                interrupt for human approval first (unless require_approval=false)
+- condition:    routes to the `true` or `false` labeled edge based on a predicate
+- approval:     human-in-the-loop gate; pauses the run until approve/reject
 
 Edges are unlabeled except out of condition nodes, which must have exactly
 one `true` and one `false` edge. Nodes with no outgoing edge flow to END.
@@ -18,7 +23,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-NodeType = Literal["agent", "tool", "condition", "approval"]
+NodeType = Literal["agent", "orchestrator", "tool", "condition", "approval"]
 PredicateKind = Literal["output_contains", "output_not_contains", "tool_success"]
 
 
@@ -42,11 +47,16 @@ class NodeSpec(BaseModel):
     # UI-only; persisted so the editor layout survives reloads.
     position: Position = Field(default_factory=Position)
 
-    # type == "agent"
+    # type == "agent" or "orchestrator" (the orchestrator's own persona/brain).
     agent_id: int | None = None
     # Prompt template. Placeholders: {task} {repo_path} {last_output} and
     # {<node_id>} for any prior node's output.
     prompt: str = "{task}"
+
+    # type == "orchestrator" — agent ids exposed to the orchestrator as
+    # delegation tools ("agents-as-tools"). The orchestrator routes the request
+    # to one or more of these sub-agents.
+    team: list[int] = Field(default_factory=list)
 
     # type == "tool"
     tool: str | None = None
@@ -103,6 +113,19 @@ class GraphSpec(BaseModel):
                     raise ValueError(f"non-condition node '{n.id}' has a labeled edge")
             if n.type == "agent" and n.agent_id is None:
                 raise ValueError(f"agent node '{n.id}' is missing agent_id")
+            if n.type == "orchestrator":
+                if n.agent_id is None:
+                    raise ValueError(
+                        f"orchestrator node '{n.id}' is missing agent_id (its persona)"
+                    )
+                if not n.team:
+                    raise ValueError(
+                        f"orchestrator node '{n.id}' needs at least one team member"
+                    )
+                if n.agent_id in n.team:
+                    raise ValueError(
+                        f"orchestrator node '{n.id}' cannot have itself as a team member"
+                    )
             if n.type == "tool" and not n.tool:
                 raise ValueError(f"tool node '{n.id}' is missing a tool name")
         _ = by_id
