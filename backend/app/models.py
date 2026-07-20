@@ -57,6 +57,37 @@ class Agent(Base):
     )
 
 
+class CustomTool(Base):
+    """A user-defined tool. Its behaviour is stored Python source that defines
+    a top-level ``run(params: dict) -> str`` function, executed in an isolated
+    subprocess (see app/tools/pyexec.py) jailed to the run's repo directory.
+
+    Custom tools are merged into the in-memory tool REGISTRY at startup and
+    after every write, so they appear anywhere a builtin tool does (agent
+    permissions, workflow tool nodes, /api/meta)."""
+
+    __tablename__ = "custom_tools"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Tool name as the model sees it; must be a valid identifier and must not
+    # collide with a builtin tool.
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    # JSON Schema for the tool's params (reused verbatim as the Anthropic
+    # tool input_schema).
+    input_schema: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # True if the tool writes, executes, or touches anything outside pure
+    # reads. Drives approval gating and safe-mode filtering, exactly like a
+    # builtin's mutating flag.
+    mutating: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Python source defining `def run(params: dict) -> str`.
+    source_code: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class Workflow(Base):
     __tablename__ = "workflows"
 

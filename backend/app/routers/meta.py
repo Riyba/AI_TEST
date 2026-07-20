@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from ..config import get_settings
 from ..llm import AVAILABLE_MODELS
 from ..schemas import MetaOut, ToolMeta
-from ..tools import REGISTRY
+from ..tools import REGISTRY, is_builtin
 
 router = APIRouter(prefix="/api/meta", tags=["meta"])
 
@@ -23,6 +23,7 @@ async def get_meta() -> MetaOut:
                 description=t.description,
                 mutating=t.mutating,
                 input_schema=t.input_schema,
+                builtin=is_builtin(t.name),
             )
             for t in REGISTRY.values()
         ],

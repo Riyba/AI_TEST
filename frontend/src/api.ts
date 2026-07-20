@@ -2,12 +2,16 @@ import type {
   Agent,
   AgentInput,
   Attachment,
+  CustomTool,
+  CustomToolInput,
   FsListing,
   GraphSpec,
   Meta,
   Metrics,
   Run,
   RunDetail,
+  ToolDraft,
+  ToolTestResult,
   Workflow,
 } from "./types";
 
@@ -120,4 +124,31 @@ export const api = {
     }),
 
   metrics: () => request<Metrics>("/api/metrics"),
+
+  listTools: () => request<CustomTool[]>("/api/tools"),
+  createTool: (t: CustomToolInput) =>
+    request<CustomTool>("/api/tools", { method: "POST", body: JSON.stringify(t) }),
+  updateTool: (id: number, t: CustomToolInput) =>
+    request<CustomTool>(`/api/tools/${id}`, { method: "PUT", body: JSON.stringify(t) }),
+  deleteTool: (id: number, force = false) =>
+    request<void>(`/api/tools/${id}${force ? "?force=true" : ""}`, {
+      method: "DELETE",
+    }),
+  generateTool: (payload: {
+    prompt: string;
+    attachment_ids?: number[];
+    model?: string;
+  }) =>
+    request<ToolDraft>("/api/tools/generate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  testTool: (
+    id: number,
+    payload: { repo_path: string; params: Record<string, unknown> },
+  ) =>
+    request<ToolTestResult>(`/api/tools/${id}/test`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };

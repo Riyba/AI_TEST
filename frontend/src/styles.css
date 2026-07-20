@@ -140,7 +140,22 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 .badge.running, .badge.pending { color: var(--amber); border-color: var(--amber); }
 .badge.waiting_approval { color: var(--amber); border-color: var(--amber); }
 .badge.succeeded { color: var(--green); border-color: var(--green); }
-.badge.failed, .badge.rejected, .badge.cancelled { color: var(--red); border-color: var(--red); }
+.badge.failed, .badge.rejected, .badge.cancelled, .badge.danger { color: var(--red); border-color: var(--red); }
+
+/* Monospace text inputs / code areas on the Tools page. */
+.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.output-block {
+  white-space: pre-wrap; word-break: break-word; font-size: 12px;
+  font-family: ui-monospace, Menlo, monospace; background: var(--code-bg, rgba(127,127,127,.08));
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0;
+  max-height: 320px; overflow: auto;
+}
+/* A file-input label styled to read like a button. */
+.btn-like {
+  display: inline-flex; align-items: center; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  font-size: 13px; background: var(--surface, transparent); white-space: nowrap;
+}
 
 .split { display: flex; gap: 20px; align-items: flex-start; }
 .split .main-col { flex: 1; min-width: 0; }

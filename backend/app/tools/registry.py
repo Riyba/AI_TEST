@@ -132,6 +132,64 @@ _register(Tool(
 ))
 
 
+# Names registered above are the builtin, code-defined tools. Everything added
+# later via sync_custom_tools() is a user-defined tool loaded from the database.
+BUILTIN_TOOL_NAMES: frozenset[str] = frozenset(REGISTRY)
+
+
+def is_builtin(name: str) -> bool:
+    return name in BUILTIN_TOOL_NAMES
+
+
+def _custom_handler(source: str) -> Callable[[Path, dict[str, Any]], tuple[bool, str]]:
+    """Build a registry handler that runs stored Python in an isolated
+    subprocess. Imported lazily so the registry has no hard dependency on the
+    executor at import time."""
+
+    def handler(root: Path, params: dict[str, Any]) -> tuple[bool, str]:
+        from .pyexec import run_python_tool
+
+        return run_python_tool(source, root, params)
+
+    return handler
+
+
+def register_custom_tool(
+    *,
+    name: str,
+    description: str,
+    input_schema: dict[str, Any],
+    mutating: bool,
+    source_code: str,
+) -> None:
+    REGISTRY[name] = Tool(
+        name=name,
+        description=description,
+        input_schema=input_schema,
+        mutating=mutating,
+        handler=_custom_handler(source_code),
+    )
+
+
+def sync_custom_tools(rows: list[Any]) -> None:
+    """Replace all custom tools in the registry with the given DB rows.
+
+    ``rows`` are objects exposing name/description/input_schema/mutating/
+    source_code (the CustomTool ORM rows). Builtins are never touched, so a
+    custom tool can never shadow or remove one."""
+    for existing in list(REGISTRY):
+        if existing not in BUILTIN_TOOL_NAMES:
+            del REGISTRY[existing]
+    for row in rows:
+        register_custom_tool(
+            name=row.name,
+            description=row.description,
+            input_schema=row.input_schema or {"type": "object", "properties": {}},
+            mutating=bool(row.mutating),
+            source_code=row.source_code,
+        )
+
+
 def tool_schemas_for(names: list[str], *, include_mutating: bool) -> list[dict[str, Any]]:
     """Anthropic tool definitions for the given tool names."""
     defs: list[dict[str, Any]] = []

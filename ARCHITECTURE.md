@@ -167,6 +167,35 @@ Anthropic tool definition), a `mutating` flag, and a sync handler run via
 3. Done: it appears in `/api/meta`, the agent editor's permission list, and the
    workflow editor's tool-node dropdown automatically.
 
+### Custom (user-defined) tools
+
+Beyond the builtin, code-defined tools above, users create their own from the
+**Tools** page (`frontend/src/pages/ToolsPage.tsx`). These are DB-backed rows
+(`custom_tools` table, `models.CustomTool`) whose behaviour is stored Python
+that defines `def run(params: dict) -> str`. Two authoring paths, both ending in
+a human-reviewed save: write the code directly, or `POST /api/tools/generate`
+(prompt + optional reference attachments) which has the model draft the code,
+schema, and `mutating` flag via a single forced `emit_tool` call
+(`app/tools/generate.py`) — the draft is returned unsaved for review.
+
+- **Registry integration** — `registry.sync_custom_tools()` loads the rows into
+  the same in-memory `REGISTRY`, wrapping each in a handler that runs its source
+  via the executor. It's called at startup (`main.lifespan`) and after every
+  write in `app/routers/tools.py`, so builtins are never shadowed
+  (`BUILTIN_TOOL_NAMES` is frozen before any sync) and all existing call sites
+  (`execute_tool`, `tool_schemas_for`, `/api/meta`, agent/workflow tool lists)
+  see custom tools with no changes. The `mutating` flag flows into approval
+  gating and safe-mode filtering exactly like a builtin's.
+- **Isolation** (`app/tools/pyexec.py` + the standalone `_pyrunner.py` harness) —
+  unlike builtins, custom tool code is untrusted, so it never runs in the server
+  process. Each call runs in a subprocess with `cwd` at the run's repo, a
+  **scrubbed environment** (API keys/secrets removed), a wall-clock timeout, and
+  best-effort CPU/memory rlimits; output is capped and tracebacks are captured as
+  failures. This is a process boundary, not a full sandbox — network and absolute
+  paths are still reachable — which is why creation is human-reviewed and the
+  feature is scoped to this single-user local tool. `POST /api/tools/{id}/test`
+  dry-runs a tool against a chosen repo before it's wired into a workflow.
+
 ## LLM layer (`app/llm.py`)
 
 `LLMProvider` is a one-method protocol (`complete(...) -> LLMResponse`);

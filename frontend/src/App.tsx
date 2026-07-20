@@ -8,6 +8,7 @@ import MetricsPage from "./pages/MetricsPage";
 import RunDetailPage from "./pages/RunDetailPage";
 import RunLaunchPage from "./pages/RunLaunchPage";
 import RunsPage from "./pages/RunsPage";
+import ToolsPage from "./pages/ToolsPage";
 import WorkflowEditorPage from "./pages/WorkflowEditorPage";
 import WorkflowsPage from "./pages/WorkflowsPage";
 
@@ -26,6 +27,7 @@ export default function App() {
         </h1>
         <NavLink to="/workflows">Workflows</NavLink>
         <NavLink to="/agents">Agents</NavLink>
+        <NavLink to="/tools">Tools</NavLink>
         <NavLink to="/runs">Runs</NavLink>
         <NavLink to="/metrics">Metrics</NavLink>
         <div className="sidebar-footer">
@@ -40,6 +42,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/workflows" replace />} />
           <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/tools" element={<ToolsPage />} />
           <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/workflows/:id" element={<WorkflowEditorPage />} />
           <Route path="/runs" element={<RunsPage />} />

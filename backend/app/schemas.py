@@ -171,6 +171,55 @@ class ToolMeta(BaseModel):
     description: str
     mutating: bool
     input_schema: dict[str, Any]
+    # False for user-defined tools (editable on the Tools page); True for the
+    # builtin, code-defined tools which are read-only.
+    builtin: bool = True
+
+
+class CustomToolIn(BaseModel):
+    name: str
+    description: str = ""
+    input_schema: dict[str, Any] = Field(
+        default_factory=lambda: {"type": "object", "properties": {}}
+    )
+    mutating: bool = True
+    source_code: str = ""
+
+
+class CustomToolOut(CustomToolIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ToolGenerateIn(BaseModel):
+    # Natural-language description of the tool to build.
+    prompt: str
+    # Staged attachment ids (uploaded via POST /api/attachments) to give the
+    # model as reference material (API docs, examples, schemas…).
+    attachment_ids: list[int] = Field(default_factory=list)
+    model: str = "claude-sonnet-5"
+
+
+class ToolDraft(BaseModel):
+    """An unsaved tool definition drafted by the model, for human review."""
+
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+    mutating: bool
+    source_code: str
+
+
+class ToolTestIn(BaseModel):
+    repo_path: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolTestOut(BaseModel):
+    success: bool
+    output: str
 
 
 class MetaOut(BaseModel):

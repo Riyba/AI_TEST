@@ -201,6 +201,37 @@ export interface ToolMeta {
   description: string;
   mutating: boolean;
   input_schema: Record<string, unknown>;
+  /** false for user-defined tools (editable); true for read-only builtins */
+  builtin: boolean;
+}
+
+export interface CustomTool {
+  id: number;
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  mutating: boolean;
+  source_code: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CustomToolInput = Omit<
+  CustomTool,
+  "id" | "created_at" | "updated_at"
+>;
+
+export interface ToolDraft {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  mutating: boolean;
+  source_code: string;
+}
+
+export interface ToolTestResult {
+  success: boolean;
+  output: string;
 }
 
 export interface Meta {

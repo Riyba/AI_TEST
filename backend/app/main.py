@@ -10,10 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from sqlalchemy import select
+
 from .db import SessionLocal, engine
 from .db import Base
-from .routers import agents, attachments, fs, meta, metrics, runs, workflows
+from .models import CustomTool
+from .routers import agents, attachments, fs, meta, metrics, runs, tools, workflows
 from .templates import seed_templates
+from .tools import sync_custom_tools
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
@@ -25,6 +29,14 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
         await seed_templates(session)
+        # Load user-defined tools into the in-memory registry so they are
+        # available to agent loops and workflow nodes from the first request.
+        rows = (
+            (await session.execute(select(CustomTool).order_by(CustomTool.id)))
+            .scalars()
+            .all()
+        )
+        sync_custom_tools(list(rows))
     yield
     await engine.dispose()
 
@@ -51,6 +63,7 @@ app.include_router(runs.router)
 app.include_router(meta.router)
 app.include_router(metrics.router)
 app.include_router(fs.router)
+app.include_router(tools.router)
 
 
 @app.get("/api/health")
