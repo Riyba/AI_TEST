@@ -16,3 +16,19 @@ dependencies = [
     "sqlalchemy>=2.0",
     "uvicorn[standard]>=0.51.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+addopts = "-q"
+filterwarnings = [
+    # LangGraph/pydantic can emit deprecation noise; keep test output clean.
+    "ignore::DeprecationWarning",
+]
