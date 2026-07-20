@@ -58,7 +58,7 @@ A workflow's `graph` column maps 1:1 onto a LangGraph `StateGraph`:
 
 Rules (validated server-side, surfaced in the editor):
 
-- Node types: `agent`, `tool`, `condition`, `approval`.
+- Node types: `agent`, `orchestrator`, `tool`, `condition`, `approval`.
 - A `condition` node has exactly two outgoing edges labeled `true`/`false` and
   becomes `add_conditional_edges` with a router reading `state["route"]`.
 - Every other node has at most one outgoing edge; nodes with none flow to `END`.
@@ -85,6 +85,18 @@ All nodes share one `WorkflowState` (`app/graph/state.py`): `task`, `repo_path`,
   the model's `tool_use` blocks are dispatched to the registry, results are fed
   back, until the model stops calling tools (or `MAX_TOOL_ITERATIONS`). The
   agent's permitted toolset excludes mutating tools when `require_approval` is on.
+- **orchestrator** — the *agents-as-tools* pattern. Carries an `agent_id` (its
+  own router persona) and a `team` of agent ids. Each team member is turned into
+  a synthetic `delegate_to_<agent>` tool whose input is a free-text `request`;
+  the orchestrator LLM runs a tool-use loop (via the same
+  `run_agent_loop` helper as `agent` nodes) and picks which specialist(s) should
+  handle the request. Each delegation runs that sub-agent's own tool-use loop and
+  is recorded as its own `run_step` (attributed to the sub-agent's name, so
+  per-agent metrics still work), then its answer is fed back to the orchestrator,
+  which routes further or synthesizes a final response. Delegated sub-agents run
+  their normal (approval-respecting) toolsets; because the whole thing is one
+  node with many LLM calls, it can't host mid-loop approval interrupts — same
+  constraint as a regular agent loop.
 - **tool** — renders params, then executes one registry tool. If the tool is
   mutating and the node's `require_approval` is true, it interrupts first (below).
 - **condition** — evaluates its predicate (`tool_success`, `output_contains`,

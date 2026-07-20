@@ -1,20 +1,22 @@
-/* Light theme (default) — airy blue accents */
+/* Light theme (default) — Zurich Insurance palette (zurich.co.uk):
+   Zurich Blue (Endeavour #0060ae) primary, Cerulean #0a8ad2 secondary,
+   deep navy text on white / soft blue-grey surfaces. */
 :root {
-  --bg: #f4f8fc;
+  --bg: #f3f6fa;
   --bg-panel: #ffffff;
-  --bg-raised: #eef4fb;
-  --border: #d7e3f0;
-  --text: #1b2733;
-  --muted: #5f7385;
-  --accent: #2f8fe0;
+  --bg-raised: #eaf1f8;
+  --border: #d2dce8;
+  --text: #16243d;
+  --muted: #5a6b81;
+  --accent: #0060ae;
   --on-accent: #ffffff;
   --green: #1f9d57;
   --red: #d8463f;
   --amber: #b9791a;
-  --shadow: 0 1px 2px rgba(27, 39, 51, 0.06), 0 1px 8px rgba(27, 39, 51, 0.04);
+  --shadow: 0 1px 2px rgba(0, 96, 174, 0.07), 0 1px 8px rgba(22, 36, 61, 0.05);
   /* Chart series colors — categorical slots validated for CVD separation and
      ≥3:1 contrast against the panel surface in both themes. */
-  --viz-s1: #2a78d6;
+  --viz-s1: #0060ae;
   --viz-s2: #008300;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -161,11 +163,23 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 .wf-node.selected { border-color: var(--accent); }
 .wf-node .nt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .wf-node .nt.agent { color: var(--accent); }
+.wf-node .nt.orchestrator { color: var(--purple, #a970ff); font-weight: 700; }
 .wf-node .nt.tool { color: var(--green); }
 .wf-node .nt.condition { color: var(--amber); }
 .wf-node .nt.approval { color: var(--red); }
 .wf-node .nm { font-weight: 600; margin-top: 2px; }
 .wf-node .sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+.team-picker {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
 /* trace */
 .trace { display: flex; flex-direction: column; gap: 6px; }

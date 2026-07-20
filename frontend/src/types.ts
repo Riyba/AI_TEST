@@ -1,6 +1,6 @@
 // Mirrors backend/app/schemas.py and app/graph/spec.py
 
-export type NodeType = "agent" | "tool" | "condition" | "approval";
+export type NodeType = "agent" | "orchestrator" | "tool" | "condition" | "approval";
 export type PredicateKind = "output_contains" | "output_not_contains" | "tool_success";
 
 export interface Predicate {
@@ -16,6 +16,7 @@ export interface NodeSpec {
   position: { x: number; y: number };
   agent_id?: number | null;
   prompt?: string;
+  team?: number[];
   tool?: string | null;
   params?: Record<string, unknown>;
   require_approval?: boolean;

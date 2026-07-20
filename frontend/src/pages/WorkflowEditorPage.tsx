@@ -40,6 +40,7 @@ const nodeTypes = { wf: WfNodeView };
 
 const DEFAULTS: Record<NodeType, Partial<NodeSpec>> = {
   agent: { prompt: "{task}" },
+  orchestrator: { prompt: "{task}", team: [] },
   tool: { tool: "git_diff", params: {}, require_approval: true },
   condition: { predicate: { kind: "tool_success", value: "", node_id: null } },
   approval: { message: "Approve to continue?" },
@@ -48,6 +49,10 @@ const DEFAULTS: Record<NodeType, Partial<NodeSpec>> = {
 function subtitleFor(spec: NodeSpec, agents: Agent[]): string {
   if (spec.type === "agent") {
     return agents.find((a) => a.id === spec.agent_id)?.name ?? "(no agent)";
+  }
+  if (spec.type === "orchestrator") {
+    const persona = agents.find((a) => a.id === spec.agent_id)?.name ?? "(no agent)";
+    return `${persona} · ${(spec.team ?? []).length} agents`;
   }
   if (spec.type === "tool") return spec.tool ?? "";
   if (spec.type === "condition") {
@@ -169,7 +174,8 @@ export default function WorkflowEditorPage() {
       type,
       name: nodeId,
       position: { x: 80 + nodes.length * 40, y: 80 + (nodes.length % 5) * 60 },
-      agent_id: type === "agent" ? agents[0]?.id ?? null : null,
+      agent_id:
+        type === "agent" || type === "orchestrator" ? agents[0]?.id ?? null : null,
       ...DEFAULTS[type],
     } as NodeSpec;
     setNodes((current) => [
@@ -252,6 +258,7 @@ export default function WorkflowEditorPage() {
         <div className="spacer" />
         <span className="muted small">{status}</span>
         <button onClick={() => addNode("agent")}>+ Agent</button>
+        <button onClick={() => addNode("orchestrator")}>+ Orchestrator</button>
         <button onClick={() => addNode("tool")}>+ Tool</button>
         <button onClick={() => addNode("condition")}>+ Condition</button>
         <button onClick={() => addNode("approval")}>+ Approval</button>
@@ -370,6 +377,61 @@ function NodeFields({
           value={spec.prompt ?? ""}
           onChange={(e) => onChange({ prompt: e.target.value })}
         />
+      </>
+    );
+  }
+
+  if (spec.type === "orchestrator") {
+    const team = spec.team ?? [];
+    const toggleMember = (agentId: number) =>
+      onChange({
+        team: team.includes(agentId)
+          ? team.filter((t) => t !== agentId)
+          : [...team, agentId],
+      });
+    return (
+      <>
+        <label>Orchestrator agent (the router persona)</label>
+        <select
+          value={spec.agent_id ?? ""}
+          onChange={(e) => onChange({ agent_id: Number(e.target.value) })}
+        >
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>{a.name} · {a.model}</option>
+          ))}
+        </select>
+        <label>Team — agents exposed as delegation tools</label>
+        <div className="team-picker">
+          {agents
+            .filter((a) => a.id !== spec.agent_id)
+            .map((a) => (
+              <div key={a.id} className="checkbox-row">
+                <input
+                  id={`team-${spec.id}-${a.id}`}
+                  type="checkbox"
+                  checked={team.includes(a.id)}
+                  onChange={() => toggleMember(a.id)}
+                />
+                <label htmlFor={`team-${spec.id}-${a.id}`}>
+                  {a.name} <span className="muted small">· {a.role || a.model}</span>
+                </label>
+              </div>
+            ))}
+        </div>
+        {team.length === 0 && (
+          <p className="warn small">Select at least one team member.</p>
+        )}
+        <label>Prompt template</label>
+        <textarea
+          rows={5}
+          value={spec.prompt ?? ""}
+          onChange={(e) => onChange({ prompt: e.target.value })}
+        />
+        <p className="muted small">
+          The orchestrator LLM receives one <code>delegate_to_&lt;agent&gt;</code> tool per
+          team member and decides which specialist handles the request, then synthesizes
+          the result.
+        </p>
       </>
     );
   }
