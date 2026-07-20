@@ -2,6 +2,7 @@ import type {
   Agent,
   AgentInput,
   Attachment,
+  FsListing,
   GraphSpec,
   Meta,
   Metrics,
@@ -49,6 +50,11 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
 
 export const api = {
   meta: () => request<Meta>("/api/meta"),
+
+  browseDir: (path?: string) =>
+    request<FsListing>(
+      `/api/fs/list${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+    ),
 
   uploadAttachment: (file: File, agentId?: number) => {
     const form = new FormData();

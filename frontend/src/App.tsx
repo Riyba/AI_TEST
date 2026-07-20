@@ -32,9 +32,6 @@ export default function App() {
           {meta && !meta.api_key_configured && (
             <div className="warn">ANTHROPIC_API_KEY not set</div>
           )}
-          {meta && meta.project_roots.length === 0 && (
-            <div className="warn">PROJECT_ROOTS not set</div>
-          )}
           <SettingsMenu />
           <div className="muted small">UK DevOps</div>
         </div>

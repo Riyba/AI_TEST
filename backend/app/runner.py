@@ -29,17 +29,16 @@ from .models import TERMINAL_STATUSES, Agent, Artifact, Attachment, Run, Workflo
 
 
 def validate_repo_path(raw: str) -> Path:
-    settings = get_settings()
-    roots = settings.allowed_roots()
-    if not roots:
-        raise ValueError(
-            "PROJECT_ROOTS is not configured. Set it in backend/.env to the "
-            "directories runs are allowed to target."
-        )
+    if not raw or not raw.strip():
+        raise ValueError("repo_path is required")
     path = Path(raw).expanduser().resolve()
     if not path.is_dir():
         raise ValueError(f"repo_path is not a directory: {raw}")
-    if not any(path.is_relative_to(root) for root in roots):
+    # PROJECT_ROOTS is now an *optional* allowlist. When set, runs are still
+    # confined to those directories; when unset, any existing directory is
+    # allowed (pick one via the file browser in the UI).
+    roots = get_settings().allowed_roots()
+    if roots and not any(path.is_relative_to(root) for root in roots):
         raise ValueError(
             f"repo_path must be inside one of PROJECT_ROOTS: {[str(r) for r in roots]}"
         )

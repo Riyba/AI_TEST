@@ -209,3 +209,16 @@ export interface Meta {
   api_key_configured: boolean;
   datadog_configured: boolean;
 }
+
+export interface FsEntry {
+  name: string;
+  path: string;
+  is_git_repo: boolean;
+}
+
+export interface FsListing {
+  path: string;
+  parent: string | null;
+  is_git_repo: boolean;
+  entries: FsEntry[];
+}

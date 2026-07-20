@@ -179,3 +179,16 @@ class MetaOut(BaseModel):
     project_roots: list[str]
     api_key_configured: bool
     datadog_configured: bool
+
+
+class FsEntry(BaseModel):
+    name: str
+    path: str
+    is_git_repo: bool
+
+
+class FsListing(BaseModel):
+    path: str
+    parent: str | None
+    is_git_repo: bool
+    entries: list[FsEntry]

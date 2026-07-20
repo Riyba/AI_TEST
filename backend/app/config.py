@@ -33,9 +33,10 @@ class Settings(BaseSettings):
     # Extra tags applied to every metric, comma-separated (e.g. "env:dev,team:me").
     datadog_tags: str = ""
 
-    # Colon-separated list of directories that runs are allowed to target.
-    # A run's repo_path must resolve inside one of these. Required for running
-    # workflows; CRUD works without it.
+    # Optional colon-separated allowlist of directories that runs may target.
+    # When set, a run's repo_path must resolve inside one of these. When empty
+    # (the default), any existing directory is allowed — chosen via the file
+    # browser in the UI.
     project_roots: str = ""
 
     # Where SQLite files live.

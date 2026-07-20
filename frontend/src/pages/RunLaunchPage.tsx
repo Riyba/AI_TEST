@@ -2,25 +2,25 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import AttachmentsEditor from "../components/AttachmentsEditor";
-import type { Attachment, Meta, Workflow } from "../types";
+import DirectoryPicker from "../components/DirectoryPicker";
+import type { Attachment, Workflow } from "../types";
 
 export default function RunLaunchPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [meta, setMeta] = useState<Meta | null>(null);
   const [workflowId, setWorkflowId] = useState<number | "">(
     params.get("workflow") ? Number(params.get("workflow")) : "",
   );
   const [task, setTask] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [repoPath, setRepoPath] = useState(localStorage.getItem("lastRepoPath") ?? "");
+  const [showPicker, setShowPicker] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.listWorkflows().then(setWorkflows).catch((e) => setError(e.message));
-    api.meta().then(setMeta).catch(() => undefined);
   }, []);
 
   const launch = async () => {
@@ -46,12 +46,6 @@ export default function RunLaunchPage() {
     <div style={{ maxWidth: 640 }}>
       <h2>New run</h2>
       {error && <div className="error-box">{error}</div>}
-      {meta && meta.project_roots.length === 0 && (
-        <div className="warn" style={{ marginBottom: 12 }}>
-          PROJECT_ROOTS is not configured in backend/.env — runs will be rejected until you
-          set the directories runs may target.
-        </div>
-      )}
       <div className="panel">
         <label>Workflow</label>
         <select
@@ -66,12 +60,17 @@ export default function RunLaunchPage() {
           ))}
         </select>
 
-        <label>Repository path (must be inside PROJECT_ROOTS)</label>
-        <input
-          value={repoPath}
-          onChange={(e) => setRepoPath(e.target.value)}
-          placeholder="/Users/you/Dev/my-project"
-        />
+        <label>Repository path</label>
+        <div className="path-row">
+          <input
+            value={repoPath}
+            onChange={(e) => setRepoPath(e.target.value)}
+            placeholder="/Users/you/Dev/my-project"
+          />
+          <button type="button" onClick={() => setShowPicker(true)}>
+            Browse…
+          </button>
+        </div>
 
         <label>Task / target (available to prompts as {"{task}"})</label>
         <textarea
@@ -97,6 +96,16 @@ export default function RunLaunchPage() {
           </button>
         </div>
       </div>
+      {showPicker && (
+        <DirectoryPicker
+          initialPath={repoPath || undefined}
+          onSelect={(p) => {
+            setRepoPath(p);
+            setShowPicker(false);
+          }}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </div>
   );
 }
