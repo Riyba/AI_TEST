@@ -16,6 +16,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 from sqlalchemy import select, update
 
+from . import datadog
 from .attachments import AttachmentContent
 from .config import get_settings
 from .db import SessionLocal
@@ -24,9 +25,7 @@ from .graph.builder import build_graph
 from .graph.nodes import AgentDef, RunContext, RunRejectedError
 from .graph.spec import GraphSpec, validate_graph
 from .llm import get_provider
-from .models import Agent, Artifact, Attachment, Run, Workflow
-
-TERMINAL_STATUSES = {"succeeded", "failed", "rejected", "cancelled"}
+from .models import TERMINAL_STATUSES, Agent, Artifact, Attachment, Run, Workflow
 
 
 def validate_repo_path(raw: str) -> Path:
@@ -78,6 +77,7 @@ class RunManager:
                 pass
             cancelled = True
         await _set_status(run_id, "cancelled", finished=True)
+        await datadog.sync_run(run_id)
         bus.emit(run_id, "run_status", status="cancelled")
         bus.close(run_id)
         return cancelled
@@ -167,6 +167,8 @@ class RunManager:
                     )
                     await session.commit()
             await _set_status(run_id, "succeeded", finished=True)
+            # Best-effort, before run_finished so watchers refetch the synced flag.
+            await datadog.sync_run(run_id)
             bus.emit(run_id, "run_status", status="succeeded")
             bus.emit(run_id, "run_finished", status="succeeded")
             bus.close(run_id)
@@ -175,11 +177,13 @@ class RunManager:
             raise  # cancel() handles status + events
         except RunRejectedError as exc:
             await _set_status(run_id, "rejected", finished=True, error=str(exc))
+            await datadog.sync_run(run_id)
             bus.emit(run_id, "run_status", status="rejected", error=str(exc))
             bus.emit(run_id, "run_finished", status="rejected")
             bus.close(run_id)
         except Exception as exc:  # noqa: BLE001 — surface any failure on the run
             await _set_status(run_id, "failed", finished=True, error=str(exc))
+            await datadog.sync_run(run_id)
             bus.emit(run_id, "run_status", status="failed", error=str(exc))
             bus.emit(run_id, "run_finished", status="failed")
             bus.close(run_id)

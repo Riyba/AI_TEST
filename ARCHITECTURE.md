@@ -22,7 +22,8 @@ FastAPI routers ── runner.RunManager ── LangGraph StateGraph
   marks seeded starters; cloning copies the graph.
 - **runs** — status, input (`task`, `repo_path`), `thread_id` (checkpointer key),
   token totals, error, `time_saved_minutes` (user-estimated; NULL = never
-  captured, and excluded from time-savings metrics).
+  captured, and excluded from time-savings metrics), `synced_to_datadog`
+  (True once the run's metrics were accepted by Datadog).
 - **run_steps** — one row per executed node: input, output, tool-call log,
   per-step token usage, timestamps. This is the durable trace used for replay.
 - **artifacts** — files written by tools, plus the run's `final_output` text.
@@ -123,6 +124,13 @@ typed events (`run_status`, `node_started`, `node_finished`, `tool_call`,
 then tails live events; a `done` SSE event closes it. Durable history is the
 `run_steps`/`artifacts` tables, which the run-detail page renders for finished
 runs (and after restarts, when in-memory history is gone).
+
+`app/datadog.py` (opt-in, see DATADOG.md) pushes each finished run's business
+metrics — runs, tokens, time saved, per-agent usage — to Datadog's metrics
+API. The runner calls `sync_run` on every terminal path; success flips
+`Run.synced_to_datadog`, which guards against double submission and drives the
+retry endpoint (`POST /api/runs/{id}/datadog-sync`). Time-saved edits after
+sync are reconciled as count deltas. Failures never affect the run.
 
 ## Tool layer & sandboxing (`app/tools/`)
 

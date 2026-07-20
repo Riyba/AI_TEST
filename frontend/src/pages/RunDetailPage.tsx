@@ -16,6 +16,11 @@ export default function RunDetailPage() {
   const [error, setError] = useState("");
   const [timeSavedPrompt, setTimeSavedPrompt] = useState(false);
   const [savingTime, setSavingTime] = useState(false);
+  const [datadogConfigured, setDatadogConfigured] = useState(false);
+
+  useEffect(() => {
+    api.meta().then((m) => setDatadogConfigured(m.datadog_configured)).catch(() => undefined);
+  }, []);
   const sourceRef = useRef<EventSource | null>(null);
   // Only prompt for an estimate when the run finished while being watched;
   // already-finished runs are edited from Run history instead.
@@ -125,6 +130,9 @@ export default function RunDetailPage() {
         repo: {run.input.repo_path} · task: {run.input.task || "(none)"} · tokens:{" "}
         {run.total_input_tokens} in / {run.total_output_tokens} out · time saved:{" "}
         {formatTimeSaved(run.time_saved_minutes)}
+        {datadogConfigured && !active && (
+          <> · Datadog: {run.synced_to_datadog ? "synced ✓" : "not synced"}</>
+        )}
         {run.attachments && run.attachments.length > 0 && (
           <>
             {" "}· attachments: {run.attachments.map((a) => a.filename).join(", ")}

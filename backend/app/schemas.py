@@ -74,6 +74,8 @@ class RunOut(BaseModel):
     total_output_tokens: int
     # None = the user never captured an estimate for this run.
     time_saved_minutes: int | None = None
+    # True once the run's metrics were accepted by Datadog.
+    synced_to_datadog: bool = False
     created_at: datetime
     finished_at: datetime | None = None
 
@@ -176,3 +178,4 @@ class MetaOut(BaseModel):
     tools: list[ToolMeta]
     project_roots: list[str]
     api_key_configured: bool
+    datadog_configured: bool

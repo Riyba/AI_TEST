@@ -30,4 +30,5 @@ async def get_meta() -> MetaOut:
         api_key_configured=bool(
             settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         ),
+        datadog_configured=settings.datadog_enabled,
     )

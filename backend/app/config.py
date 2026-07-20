@@ -19,6 +19,20 @@ class Settings(BaseSettings):
     # Anthropic API base URL. Override to point at a proxy or compatible endpoint.
     anthropic_base_url: str = "https://api.anthropic.com"
 
+    # Datadog API key for the metrics integration. Unset (the default)
+    # disables the integration entirely — no Datadog network calls are made.
+    datadog_api_key: str | None = None
+
+    # Datadog site the account lives on (drives the intake hostname), e.g.
+    # datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com.
+    datadog_site: str = "datadoghq.com"
+
+    # Prefix for every submitted metric name.
+    datadog_metric_prefix: str = "agent_studio"
+
+    # Extra tags applied to every metric, comma-separated (e.g. "env:dev,team:me").
+    datadog_tags: str = ""
+
     # Colon-separated list of directories that runs are allowed to target.
     # A run's repo_path must resolve inside one of these. Required for running
     # workflows; CRUD works without it.
@@ -49,6 +63,13 @@ class Settings(BaseSettings):
     @property
     def sync_db_url(self) -> str:
         return f"sqlite:///{self.db_path}"
+
+    @property
+    def datadog_enabled(self) -> bool:
+        return bool(self.datadog_api_key)
+
+    def datadog_base_tags(self) -> list[str]:
+        return [t.strip() for t in self.datadog_tags.split(",") if t.strip()]
 
     def allowed_roots(self) -> list[Path]:
         return [

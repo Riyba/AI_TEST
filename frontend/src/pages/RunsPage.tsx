@@ -11,15 +11,31 @@ export default function RunsPage() {
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [datadogConfigured, setDatadogConfigured] = useState(false);
+  const [syncingId, setSyncingId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    api.meta().then((m) => setDatadogConfigured(m.datadog_configured)).catch(() => undefined);
     api.listRuns().then(setRuns).catch((e) => setError(e.message));
     const timer = setInterval(() => {
       api.listRuns().then(setRuns).catch(() => undefined);
     }, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  const retrySync = (runId: number) => {
+    setSyncingId(runId);
+    api
+      .retryDatadogSync(runId)
+      .then((updated) => {
+        setRuns((current) =>
+          current.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
+        );
+      })
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setSyncingId(null));
+  };
 
   const saveTimeSaved = (runId: number, minutes: number | null) => {
     setSaving(true);
@@ -47,7 +63,9 @@ export default function RunsPage() {
         <thead>
           <tr>
             <th>#</th><th>Workflow</th><th>Task</th><th>Status</th>
-            <th>Tokens (in/out)</th><th>Time saved</th><th>Started</th>
+            <th>Tokens (in/out)</th><th>Time saved</th>
+            {datadogConfigured && <th>Datadog</th>}
+            <th>Started</th>
           </tr>
         </thead>
         <tbody>
@@ -85,6 +103,24 @@ export default function RunsPage() {
                   </span>
                 )}
               </td>
+              {datadogConfigured && (
+                <td>
+                  {run.synced_to_datadog ? (
+                    <span title="Metrics synced to Datadog">✓ synced</span>
+                  ) : TERMINAL.includes(run.status) ? (
+                    <button
+                      className="link-btn"
+                      title="Metrics not synced — retry Datadog submission"
+                      disabled={syncingId === run.id}
+                      onClick={() => retrySync(run.id)}
+                    >
+                      {syncingId === run.id ? "syncing…" : "not synced — retry"}
+                    </button>
+                  ) : (
+                    <span className="muted">–</span>
+                  )}
+                </td>
+              )}
               <td className="muted">{new Date(run.created_at).toLocaleString()}</td>
             </tr>
           ))}

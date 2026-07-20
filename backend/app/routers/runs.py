@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from .. import datadog
+from ..config import get_settings
 from ..db import SessionLocal, get_session
 from ..events import bus
 from ..models import Attachment, Run, Workflow
@@ -166,9 +168,39 @@ async def set_time_saved(
         raise HTTPException(404, "run not found")
     if run.status not in TERMINAL_STATUSES:
         raise HTTPException(409, f"run has not finished (status={run.status})")
+    previous = run.time_saved_minutes
     run.time_saved_minutes = payload.time_saved_minutes
     await session.commit()
     await session.refresh(run)
+
+    # Keep Datadog's time-saved totals in step (best-effort). An already-synced
+    # run gets the delta; an unsynced run gets a full sync attempt, which now
+    # includes the new estimate.
+    if run.synced_to_datadog:
+        delta = (run.time_saved_minutes or 0) - (previous or 0)
+        await datadog.sync_time_saved(run, delta)
+    else:
+        await datadog.sync_run(run.id)
+        await session.refresh(run)
+    return run
+
+
+@router.post("/{run_id}/datadog-sync", response_model=RunOut)
+async def retry_datadog_sync(
+    run_id: int, session: AsyncSession = Depends(get_session)
+) -> Run:
+    """Retry Datadog submission for a finished run whose sync failed."""
+    if not get_settings().datadog_enabled:
+        raise HTTPException(409, "Datadog is not configured (set DATADOG_API_KEY)")
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+    if run.status not in TERMINAL_STATUSES:
+        raise HTTPException(409, f"run has not finished (status={run.status})")
+    if not run.synced_to_datadog:
+        if not await datadog.sync_run(run_id):
+            raise HTTPException(502, "Datadog submission failed — see server logs")
+        await session.refresh(run)
     return run
 
 

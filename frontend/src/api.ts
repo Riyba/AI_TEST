@@ -105,6 +105,8 @@ export const api = {
     }),
   cancelRun: (id: number) =>
     request<Run>(`/api/runs/${id}/cancel`, { method: "POST" }),
+  retryDatadogSync: (id: number) =>
+    request<Run>(`/api/runs/${id}/datadog-sync`, { method: "POST" }),
   setTimeSaved: (id: number, minutes: number | null) =>
     request<Run>(`/api/runs/${id}/time-saved`, {
       method: "PATCH",

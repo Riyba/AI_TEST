@@ -36,7 +36,7 @@ export default function App() {
             <div className="warn">PROJECT_ROOTS not set</div>
           )}
           <SettingsMenu />
-          <div className="muted small">localhost only · data stays local</div>
+          <div className="muted small">UK DevOps</div>
         </div>
       </nav>
       <main className="content">

@@ -24,6 +24,10 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Run statuses that mean the run is finished and will not change again.
+TERMINAL_STATUSES = {"succeeded", "failed", "rejected", "cancelled"}
+
+
 class Agent(Base):
     __tablename__ = "agents"
 
@@ -87,6 +91,9 @@ class Run(Base):
     # never captured an estimate — metrics must exclude those runs, so 0 and
     # "not captured" stay distinct.
     time_saved_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # True once this run's metrics were accepted by Datadog (see app/datadog.py).
+    # Stays False when the integration is disabled or submission failed.
+    synced_to_datadog: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

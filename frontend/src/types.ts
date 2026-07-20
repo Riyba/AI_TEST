@@ -93,6 +93,8 @@ export interface Run {
   total_output_tokens: number;
   /** null = the user never captured an estimate for this run */
   time_saved_minutes: number | null;
+  /** true once the run's metrics were accepted by Datadog */
+  synced_to_datadog: boolean;
   created_at: string;
   finished_at: string | null;
 }
@@ -205,4 +207,5 @@ export interface Meta {
   tools: ToolMeta[];
   project_roots: string[];
   api_key_configured: boolean;
+  datadog_configured: boolean;
 }
