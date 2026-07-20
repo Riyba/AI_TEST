@@ -41,6 +41,8 @@ const HELP = {
   source_code:
     "Python that defines def run(params: dict) -> str. It runs in an isolated subprocess (repo as working dir, secrets stripped, timeout + resource limits). Standard library and installed packages are available.",
   ai: "Describe the tool in plain English and let the AI draft the code, schema, and settings for you to review. Attach API docs or examples to guide it.",
+  model:
+    "Which AI model builds the draft — its \"brain\". Smarter models give better results but are slower and cost more; smaller ones are fast and cheap. Pick a suggestion or type a model name.",
 };
 
 function Info({ text }: { text: string }) {
@@ -255,11 +257,20 @@ export default function ToolsPage() {
               onChange={(e) => setAiPrompt(e.target.value)}
             />
             <div className="toolbar" style={{ marginTop: 8, marginBottom: 0, gap: 8, flexWrap: "wrap" }}>
-              <select value={aiModel} onChange={(e) => setAiModel(e.target.value)}>
-                {(meta?.models ?? [aiModel]).map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <span className="model-field">
+                <label>Model <Info text={HELP.model} /></label>
+                <input
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  list="model-suggestions"
+                  placeholder="e.g. claude-sonnet-5"
+                />
+                <datalist id="model-suggestions">
+                  {(meta?.models ?? []).map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </span>
               <label className="btn-like">
                 Attach reference…
                 <input

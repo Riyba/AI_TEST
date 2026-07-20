@@ -5,6 +5,7 @@ import type { Meta } from "./types";
 import SettingsMenu from "./SettingsMenu";
 import AgentsPage from "./pages/AgentsPage";
 import MetricsPage from "./pages/MetricsPage";
+import ModelsPage from "./pages/ModelsPage";
 import RunDetailPage from "./pages/RunDetailPage";
 import RunLaunchPage from "./pages/RunLaunchPage";
 import RunsPage from "./pages/RunsPage";
@@ -28,6 +29,7 @@ export default function App() {
         <NavLink to="/workflows">Workflows</NavLink>
         <NavLink to="/agents">Agents</NavLink>
         <NavLink to="/tools">Tools</NavLink>
+        <NavLink to="/models">Models</NavLink>
         <NavLink to="/runs">Runs</NavLink>
         <NavLink to="/metrics">Metrics</NavLink>
         <div className="sidebar-footer">
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/workflows" replace />} />
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/tools" element={<ToolsPage />} />
+          <Route path="/models" element={<ModelsPage />} />
           <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/workflows/:id" element={<WorkflowEditorPage />} />
           <Route path="/runs" element={<RunsPage />} />

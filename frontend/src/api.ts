@@ -10,6 +10,7 @@ import type {
   Metrics,
   Run,
   RunDetail,
+  SuggestedModel,
   ToolDraft,
   ToolTestResult,
   Workflow,
@@ -54,6 +55,15 @@ async function requestForm<T>(path: string, form: FormData): Promise<T> {
 
 export const api = {
   meta: () => request<Meta>("/api/meta"),
+
+  listModels: () => request<SuggestedModel[]>("/api/models"),
+  createModel: (name: string) =>
+    request<SuggestedModel>("/api/models", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteModel: (id: number) =>
+    request<void>(`/api/models/${id}`, { method: "DELETE" }),
 
   browseDir: (path?: string) =>
     request<FsListing>(

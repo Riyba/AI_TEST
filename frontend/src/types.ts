@@ -234,6 +234,12 @@ export interface ToolTestResult {
   output: string;
 }
 
+export interface SuggestedModel {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
 export interface Meta {
   models: string[];
   tools: ToolMeta[];

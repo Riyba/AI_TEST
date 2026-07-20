@@ -11,7 +11,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Agent, Workflow
+from .llm import AVAILABLE_MODELS
+from .models import Agent, SuggestedModel, Workflow
 
 READ_TOOLS = ["read_file", "list_files", "search_files"]
 GIT_READ_TOOLS = ["git_status", "git_diff", "git_log"]
@@ -347,4 +348,19 @@ async def seed_templates(session: AsyncSession) -> None:
                 is_template=True,
             )
         )
+    await session.commit()
+
+
+async def seed_models(session: AsyncSession) -> None:
+    """Populate the suggested-model list with the built-in defaults, once.
+
+    Runs on every boot but no-ops as soon as the table has any row, so a user
+    who has deleted every default is not force-fed them again."""
+    count = (
+        await session.execute(select(func.count()).select_from(SuggestedModel))
+    ).scalar_one()
+    if count:
+        return
+    for name in AVAILABLE_MODELS:
+        session.add(SuggestedModel(name=name))
     await session.commit()

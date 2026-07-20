@@ -88,6 +88,20 @@ class CustomTool(Base):
     )
 
 
+class SuggestedModel(Base):
+    """A model id offered as a suggestion in the UI's model pickers (agent
+    "brain", AI tool-builder). These are only suggestions — an agent may still
+    be given any model string — so removing one never invalidates existing
+    agents. Seeded from ``AVAILABLE_MODELS`` on first boot, then user-editable."""
+
+    __tablename__ = "suggested_models"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # The model id as sent to the provider, e.g. "claude-sonnet-5".
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Workflow(Base):
     __tablename__ = "workflows"
 

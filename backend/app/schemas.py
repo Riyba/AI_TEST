@@ -222,6 +222,18 @@ class ToolTestOut(BaseModel):
     output: str
 
 
+class SuggestedModelIn(BaseModel):
+    # A model id offered in the UI's model pickers, e.g. "claude-sonnet-5".
+    name: str
+
+
+class SuggestedModelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    created_at: datetime
+
+
 class MetaOut(BaseModel):
     models: list[str]
     tools: list[ToolMeta]

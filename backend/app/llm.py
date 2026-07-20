@@ -14,8 +14,10 @@ from anthropic import AsyncAnthropic
 
 from .config import get_settings
 
-# Models offered in the UI. Per-node model choice lets you use Sonnet for
-# reasoning steps and Haiku for cheap/fast steps.
+# Default model suggestions. These seed the editable ``suggested_models`` table
+# on first boot (see templates.seed_models); thereafter the list the UI offers
+# is whatever the user has curated. Per-node model choice lets you use Sonnet
+# for reasoning steps and Haiku for cheap/fast steps.
 AVAILABLE_MODELS = [
     "claude-opus-4-8",
     "claude-sonnet-5",
