@@ -112,7 +112,7 @@ def _run_series(settings: Settings, run: Run, steps: list[RunStep]) -> list[dict
 
 async def _post_series(settings: Settings, series: list[dict[str, Any]]) -> bool:
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS, verify=settings.datadog_ssl_verify) as client:
             response = await client.post(
                 _intake_url(settings),
                 json={"series": series},

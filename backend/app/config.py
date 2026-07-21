@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # Extra tags applied to every metric, comma-separated (e.g. "env:dev,team:me").
     datadog_tags: str = ""
 
+    # Set to false to disable TLS certificate verification for Datadog rqeuests
+    # (needed in environments with a self-signed corporate proxy certificate)
+    datadog_ssl_verify: bool = True
+
     # GitHub token used by the github_create_pr tool (needs `pull_request:write`
     # on the target repo, e.g. a fine-grained PAT). Unset (the default) makes
     # the tool return a clear error instead of silently no-op'ing, since a
