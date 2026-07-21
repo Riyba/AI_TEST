@@ -23,9 +23,10 @@ def test_render_injects_node_outputs() -> None:
     assert render("prior said: {n1}", state) == "prior said: hello"
 
 
-def test_render_leaves_unknown_placeholder_intact() -> None:
-    """_SafeDict returns unknown keys unchanged rather than raising KeyError."""
-    assert render("value is {mystery}", {"task": "t"}) == "value is {mystery}"
+def test_render_blanks_unknown_placeholder() -> None:
+    """_SafeDict blanks unknown keys rather than raising KeyError — e.g. a
+    loop-back prompt referencing a node not yet reached on this path."""
+    assert render("value is [{mystery}]", {"task": "t"}) == "value is []"
 
 
 def test_render_defaults_missing_state_keys_to_empty() -> None:

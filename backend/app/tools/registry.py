@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import fs, gitops, shell
+from . import fs, github, gitops, shell
 
 
 @dataclass
@@ -129,6 +129,60 @@ _register(Tool(
     input_schema=_schema({"command": {"type": "string", "description": "Optional explicit test command (must be an allowlisted runner)"}}, []),
     mutating=True,
     handler=lambda root, p: shell.run_tests(root, p.get("command", "")),
+))
+
+_register(Tool(
+    name="git_create_branch",
+    description=(
+        "Create and check out a new branch off a base branch (fetches the base "
+        "from origin first when possible). The branch name is derived by "
+        "slugifying the given name plus a random suffix for uniqueness. MUTATING."
+    ),
+    input_schema=_schema(
+        {
+            "base": {"type": "string", "description": "Base branch to branch from (default: dev)"},
+            "name": {"type": "string", "description": "Short description used to derive the branch name, e.g. the task"},
+        },
+        ["name"],
+    ),
+    mutating=True,
+    handler=lambda root, p: gitops.create_branch(root, p.get("base", "dev"), p.get("name", "")),
+))
+
+_register(Tool(
+    name="git_commit",
+    description="Stage all changes (git add -A) and commit them with the given message. MUTATING.",
+    input_schema=_schema({"message": {"type": "string", "description": "Commit message"}}, ["message"]),
+    mutating=True,
+    handler=lambda root, p: gitops.commit(root, p.get("message", "")),
+))
+
+_register(Tool(
+    name="git_push",
+    description="Push a branch to origin, setting upstream. Defaults to the currently checked-out branch. MUTATING.",
+    input_schema=_schema({"branch": {"type": "string", "description": "Branch to push (default: current branch)"}}, []),
+    mutating=True,
+    handler=lambda root, p: gitops.push(root, p.get("branch", "")),
+))
+
+_register(Tool(
+    name="github_create_pr",
+    description=(
+        "Open a pull request on GitHub via the REST API (requires GITHUB_TOKEN to be "
+        "configured). Repository owner/repo is inferred from the origin remote; head "
+        "branch defaults to the currently checked-out branch. MUTATING."
+    ),
+    input_schema=_schema(
+        {
+            "base": {"type": "string", "description": "Target branch the PR merges into (default: dev)"},
+            "head": {"type": "string", "description": "Source branch (default: currently checked-out branch)"},
+            "title": {"type": "string", "description": "PR title"},
+            "body": {"type": "string", "description": "PR description body"},
+        },
+        [],
+    ),
+    mutating=True,
+    handler=lambda root, p: github.create_pull_request(root, p),
 ))
 
 

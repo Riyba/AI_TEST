@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # Extra tags applied to every metric, comma-separated (e.g. "env:dev,team:me").
     datadog_tags: str = ""
 
+    # GitHub token used by the github_create_pr tool (needs `pull_request:write`
+    # on the target repo, e.g. a fine-grained PAT). Unset (the default) makes
+    # the tool return a clear error instead of silently no-op'ing, since a
+    # workflow node explicitly depends on it running.
+    github_token: str | None = None
+
     # Optional colon-separated allowlist of directories that runs may target.
     # When set, a run's repo_path must resolve inside one of these. When empty
     # (the default), any existing directory is allowed — chosen via the file

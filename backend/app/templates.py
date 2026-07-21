@@ -119,6 +119,65 @@ AGENT_SEEDS: list[dict[str, Any]] = [
         "tools": [],
     },
     {
+        "key": "planner",
+        "name": "Planner",
+        "role": "Engineer who scopes and plans a change before any code is written",
+        "system_prompt": (
+            "You scope and plan changes to this codebase. Read whatever files you need "
+            "for context first. If the request is simple and unambiguous, output a "
+            "concrete step-by-step implementation plan: what changes, in which files, "
+            "and why. If there are decisions only a human can make (missing "
+            "requirements, a genuine design choice, something you'd be guessing at), "
+            "output the plan you can already commit to, then a section starting with "
+            "the literal heading 'QUESTIONS:' listing exactly what you need answered "
+            "before implementation should start."
+        ),
+        "model": "claude-sonnet-5",
+        "max_turns": 15,
+        "max_tokens": 120_000,
+        "tools": READ_TOOLS + GIT_READ_TOOLS,
+    },
+    {
+        "key": "developer",
+        "name": "Developer",
+        "role": "Engineer who implements an approved plan end-to-end",
+        "system_prompt": (
+            "You implement an approved implementation plan. Read the target files and "
+            "their surroundings for context, then write or modify whatever files the "
+            "plan calls for. You may run allowlisted commands (e.g. a linter or "
+            "formatter) to sanity-check your work. If you're given prior test failures "
+            "or code review feedback, that means an earlier attempt was incomplete or "
+            "wrong — fix the specific issues described, don't just retry the same "
+            "thing. Do not touch git (branching, committing, and pushing are handled "
+            "outside your loop) — just leave the working tree in the state it should "
+            "be committed from."
+        ),
+        "model": "claude-sonnet-5",
+        "max_turns": 30,
+        "max_tokens": 300_000,
+        "tools": READ_TOOLS + ["write_file", "run_command"],
+        "require_approval": False,
+    },
+    {
+        "key": "pr_reviewer",
+        "name": "Code Reviewer (PR Gate)",
+        "role": "Senior engineer gatekeeping a pull request before it ships",
+        "system_prompt": (
+            "You are the last check before a change ships as a pull request. Review "
+            "the diff against the stated plan: correctness, security, error handling, "
+            "style, and missing test coverage. Read surrounding code for context where "
+            "needed. Be specific — cite file and line. Then end your response with "
+            "EXACTLY one line, and nothing after it: 'VERDICT: APPROVE' if this is "
+            "safe to merge as-is, or 'VERDICT: CHANGES_REQUESTED' if not. When "
+            "requesting changes, make sure the findings above are concrete enough for "
+            "another engineer to act on without asking you anything further."
+        ),
+        "model": "claude-sonnet-5",
+        "max_turns": 15,
+        "max_tokens": 150_000,
+        "tools": READ_TOOLS + GIT_READ_TOOLS,
+    },
+    {
         "key": "orchestrator",
         "name": "SDLC Orchestrator",
         "role": "Routes software-development requests to specialist agents",
@@ -310,6 +369,124 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                 "edges": [],
             },
         },
+        {
+            "name": "Feature Delivery",
+            "description": (
+                "End-to-end feature delivery: plan the change and get human approval, "
+                "branch, implement, test and review it — looping back to the developer "
+                "on any failure — then commit, push, and open a pull request into dev "
+                "for human review."
+            ),
+            "graph": {
+                "entry": "plan",
+                "nodes": [
+                    _node(
+                        "plan", "agent", "Plan the change", 0, 200,
+                        agent_id=agent_ids["planner"],
+                        prompt=(
+                            "Task: {task}\n\nRepository: {repo_path}\n\n"
+                            "Scope and plan this change. Read whatever context you need "
+                            "before answering."
+                        ),
+                    ),
+                    _node(
+                        "plan_gate", "approval", "Approve plan", 280, 200,
+                        message=(
+                            "Review the plan below. Approve to create a branch and start "
+                            "implementation. If the planner listed QUESTIONS, edit this text "
+                            "to answer them (or rewrite the plan outright) before approving — "
+                            "your edited text is what the developer implements. Reject to "
+                            "cancel the run."
+                        ),
+                    ),
+                    _node(
+                        "branch", "tool", "Create branch", 560, 200,
+                        tool="git_create_branch",
+                        params={"base": "dev", "name": "{task}"},
+                        require_approval=False,
+                    ),
+                    _node(
+                        "develop", "agent", "Implement changes", 840, 200,
+                        agent_id=agent_ids["developer"],
+                        prompt=(
+                            "Task: {task}\n\nApproved plan:\n{plan_gate}\n\n"
+                            "Repository: {repo_path}\n\nImplement the plan now.\n\n"
+                            "If this is a retry, fix the specific issues below (blank on a "
+                            "first attempt):\n\nTest failures:\n{unit_tests}\n\n"
+                            "Code review feedback:\n{code_review}"
+                        ),
+                    ),
+                    _node(
+                        "unit_tests", "tool", "Run unit tests", 1120, 200,
+                        tool="run_tests", params={}, require_approval=False,
+                    ),
+                    _node(
+                        "tests_gate", "condition", "Tests passed?", 1400, 200,
+                        predicate={"kind": "tool_success"},
+                    ),
+                    _node(
+                        "diff_for_review", "tool", "Get diff", 1680, 80,
+                        tool="git_diff", params={},
+                    ),
+                    _node(
+                        "code_review", "agent", "Review changes", 1960, 80,
+                        agent_id=agent_ids["pr_reviewer"],
+                        prompt=(
+                            "Task: {task}\n\nApproved plan:\n{plan_gate}\n\n"
+                            "Diff:\n{diff_for_review}\n\n"
+                            "Review these changes against the plan and give your verdict."
+                        ),
+                    ),
+                    _node(
+                        "review_gate", "condition", "Review approved?", 2240, 80,
+                        predicate={
+                            "kind": "output_contains",
+                            "value": "VERDICT: APPROVE",
+                            "node_id": "code_review",
+                        },
+                    ),
+                    _node(
+                        "pr_description", "agent", "Write PR description", 2520, 80,
+                        agent_id=agent_ids["pr_writer"],
+                        prompt=(
+                            "Context: {task}\n\nDiff:\n{diff_for_review}\n\n"
+                            "Write a structured PR description for this change."
+                        ),
+                    ),
+                    _node(
+                        "commit", "tool", "Commit changes", 2800, 80,
+                        tool="git_commit", params={"message": "{task}"},
+                        require_approval=False,
+                    ),
+                    _node(
+                        "push", "tool", "Push branch", 3080, 80,
+                        tool="git_push", params={}, require_approval=False,
+                    ),
+                    _node(
+                        "open_pr", "tool", "Open pull request", 3360, 80,
+                        tool="github_create_pr",
+                        params={"base": "dev", "title": "{task}", "body": "{pr_description}"},
+                        require_approval=False,
+                    ),
+                ],
+                "edges": [
+                    {"source": "plan", "target": "plan_gate"},
+                    {"source": "plan_gate", "target": "branch"},
+                    {"source": "branch", "target": "develop"},
+                    {"source": "develop", "target": "unit_tests"},
+                    {"source": "unit_tests", "target": "tests_gate"},
+                    {"source": "tests_gate", "target": "diff_for_review", "label": "true"},
+                    {"source": "tests_gate", "target": "develop", "label": "false"},
+                    {"source": "diff_for_review", "target": "code_review"},
+                    {"source": "code_review", "target": "review_gate"},
+                    {"source": "review_gate", "target": "pr_description", "label": "true"},
+                    {"source": "review_gate", "target": "develop", "label": "false"},
+                    {"source": "pr_description", "target": "commit"},
+                    {"source": "commit", "target": "push"},
+                    {"source": "push", "target": "open_pr"},
+                ],
+            },
+        },
     ]
 
 
@@ -332,7 +509,7 @@ async def seed_templates(session: AsyncSession) -> None:
             max_turns=seed["max_turns"],
             max_tokens=seed["max_tokens"],
             tools=seed["tools"],
-            require_approval=True,
+            require_approval=seed.get("require_approval", True),
             is_template=True,
         )
         session.add(agent)

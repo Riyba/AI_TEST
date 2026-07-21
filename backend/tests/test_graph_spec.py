@@ -114,6 +114,27 @@ def test_orchestrator_cannot_include_itself() -> None:
         )
 
 
+def test_condition_false_edge_may_loop_back_to_an_earlier_node() -> None:
+    """Only a node's own outgoing-edge count is restricted; nothing stops
+    multiple edges converging on the same target, which is what a retry loop
+    (a condition's false edge pointing back upstream) requires."""
+    graph = {
+        "entry": "work",
+        "nodes": [
+            _agent_node("work"),
+            {"id": "check", "type": "condition", "predicate": {"kind": "tool_success"}},
+            _agent_node("done"),
+        ],
+        "edges": [
+            {"source": "work", "target": "check"},
+            {"source": "check", "target": "done", "label": "true"},
+            {"source": "check", "target": "work", "label": "false"},
+        ],
+    }
+    spec = validate_graph(graph)
+    assert spec.entry == "work"
+
+
 def test_labeled_edge_on_non_condition_rejected() -> None:
     graph = {
         "entry": "a",

@@ -35,6 +35,8 @@ cp .env.example .env
 #    - set ANTHROPIC_API_KEY
 #    - set PROJECT_ROOTS to the directory(ies) your repos live under,
 #      e.g. PROJECT_ROOTS=/Users/you/Dev  (colon-separate multiple roots)
+#    - optional: set GITHUB_TOKEN to let the Feature Delivery workflow open
+#      pull requests (needs pull_request:write on the target repo)
 
 # 3. Build the frontend (once, and after frontend changes)
 cd ../frontend
@@ -50,7 +52,7 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Open **http://127.0.0.1:8000**. On first boot the database is created and seeded
-with 7 template agents and 5 template workflows.
+with 11 template agents and 7 template workflows.
 
 > Keep `--host 127.0.0.1`. Binding to `0.0.0.0` would expose an auth-less app to
 > your network — don't.
@@ -75,7 +77,7 @@ cd frontend && npm run dev   # http://localhost:5173, proxies /api to :8000
 5. **Runs** lists history; every past run's steps, tool calls, and artifacts are
    replayable from SQLite without re-executing.
 
-## The five starter workflows
+## The starter workflows
 
 | Template | What it does |
 |---|---|
@@ -84,11 +86,22 @@ cd frontend && npm run dev   # http://localhost:5173, proxies /api to :8000
 | PR Description Writer | diff + commit log → structured PR description |
 | Dependency Audit | agent locates and reads manifests, flags risky/outdated packages |
 | Refactor Advisor | reads target + call sites, proposes refactors with rationale — never applies them |
+| SDLC Orchestrator | one entry point that routes your request to the right specialist agent (agents-as-tools) |
+| **Feature Delivery** | plan → **human approval** → branch → implement → test → review, looping back to the developer on any failure → commit → push → open a pull request into `dev` for human review. The full plan-to-PR loop; see below. |
 
 Clone any template and edit it in the visual graph editor: add agent / tool /
 condition / approval nodes, wire edges, edit prompts and params. Prompts and tool
 params support `{task}`, `{repo_path}`, `{last_output}`, and `{<node_id>}`
 placeholders.
+
+**Feature Delivery** needs `GITHUB_TOKEN` set (see above) for its final `open_pr`
+step, and its `git_create_branch`/`git_push` steps need a `dev` branch and an
+`origin` remote to exist in the target repo. Pair it with a GitHub Actions
+workflow on `pull_request` → `dev` that runs secret-scanning (e.g. `gitleaks`)
+and linting — that's an independent, un-bypassable check on what the agents
+produced, which local tool calls inside the run can't give you. A branch
+protection rule requiring those checks is what makes the human review at the
+end of the flow actually mean something.
 
 ## Safety model
 
@@ -97,10 +110,17 @@ placeholders.
 - **Command allowlist:** `run_command`/`run_tests` parse with `shlex`, execute
   **without a shell** (no pipes/chaining possible), and only accept an allowlisted
   executable (`git`, `pytest`, `npm`, linters, …).
-- **Approval by default:** mutating tools (`write_file`, `run_command`, `run_tests`)
-  pause the run for human approval before executing. Agents in "safe mode" (the
-  default) can't call mutating tools autonomously at all — mutations only happen
-  through approval-gated workflow nodes. Both are opt-out per node / per agent.
+- **Approval by default:** mutating tools (`write_file`, `run_command`, `run_tests`,
+  `git_create_branch`, `git_commit`, `git_push`, `github_create_pr`) pause the run
+  for human approval before executing. Agents in "safe mode" (the default) can't
+  call mutating tools autonomously at all — mutations only happen through
+  approval-gated workflow nodes. Both are opt-out per node / per agent — the
+  **Feature Delivery** template's Developer agent is the one seeded exception:
+  it runs with `require_approval=false` so it can write files and run commands
+  across a multi-file change in one tool-use loop (an agent loop can't host a
+  mid-loop approval interrupt — see ARCHITECTURE.md). The human checkpoint that
+  makes this safe is the plan-approval step earlier in that workflow, plus the
+  pull request waiting for review at the end.
 - Runs paused at an approval survive server restarts — state is checkpointed by
   LangGraph's SQLite checkpointer and resumes from the checkpoint.
 

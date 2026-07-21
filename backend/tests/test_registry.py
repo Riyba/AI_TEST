@@ -101,6 +101,28 @@ def test_schema_shape_is_anthropic_compatible() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# new builtin tools (branch/commit/push/PR) — registration shape only;       #
+# behavior is covered by test_gitops.py / test_github.py                     #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "name", ["git_create_branch", "git_commit", "git_push", "github_create_pr"]
+)
+def test_delivery_tools_registered_and_mutating(name: str) -> None:
+    assert name in BUILTIN_TOOL_NAMES
+    assert REGISTRY[name].mutating is True
+
+
+def test_delivery_tools_excluded_from_safe_mode_toolset() -> None:
+    defs = tool_schemas_for(
+        ["read_file", "git_create_branch", "git_commit", "git_push", "github_create_pr"],
+        include_mutating=False,
+    )
+    assert {d["name"] for d in defs} == {"read_file"}
+
+
+# --------------------------------------------------------------------------- #
 # execute_tool                                                               #
 # --------------------------------------------------------------------------- #
 

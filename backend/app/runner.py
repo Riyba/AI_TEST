@@ -122,7 +122,14 @@ class RunManager:
                 str(settings.checkpoint_db_path)
             ) as saver:
                 graph = build_graph(spec, ctx).compile(checkpointer=saver)
-                config = {"configurable": {"thread_id": thread_id}}
+                # Default (25) is too tight for a workflow with a develop/test/review
+                # retry loop — a handful of retries alone can exceed it. This is a
+                # safety valve, not a cost control: each agent's own max_turns/
+                # max_tokens already bounds spend per node call.
+                config = {
+                    "configurable": {"thread_id": thread_id},
+                    "recursion_limit": 100,
+                }
                 stream_input: Any
                 if resume_payload is not None:
                     stream_input = Command(resume=resume_payload)

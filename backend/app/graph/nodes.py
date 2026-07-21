@@ -152,7 +152,10 @@ class RunContext:
 
 class _SafeDict(dict):
     def __missing__(self, key: str) -> str:
-        return "{" + key + "}"
+        # A referenced node that hasn't executed on this path yet (e.g. a
+        # loop-back prompt referencing a node only reached on retries) is
+        # blank, not a literal "{node_id}" the model would otherwise see.
+        return ""
 
 
 def render(template: str, state: WorkflowState) -> str:
@@ -598,10 +601,16 @@ def make_approval_node(node: NodeSpec, ctx: RunContext):
             raise RunRejectedError(decision.get("note") or "rejected by user")
         step_id = await ctx.start_step(node, {"message": node.message})
         edited = decision.get("edited_output")
-        updates: dict[str, Any] = {"node_outputs": {node.id: "approved"}}
-        if isinstance(edited, str) and edited.strip():
+        has_edit = isinstance(edited, str) and edited.strip()
+        # node_outputs[node.id] is "whatever was approved here" — the edit if
+        # the reviewer supplied one, else the content they approved as-is —
+        # so a node many hops downstream can reference {<this_node_id>} and
+        # get the right text either way, not just the immediate next node
+        # (which can already use {last_output}).
+        approved_text = edited if has_edit else state.get("last_output", "")
+        updates: dict[str, Any] = {"node_outputs": {node.id: approved_text}}
+        if has_edit:
             updates["last_output"] = edited
-            updates["node_outputs"] = {node.id: edited}
         await ctx.finish_step(
             step_id,
             node,
