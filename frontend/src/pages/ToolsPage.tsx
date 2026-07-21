@@ -67,6 +67,7 @@ export default function ToolsPage() {
   const [editing, setEditing] = useState<{ id: number | null; data: CustomToolInput } | null>(null);
   const [schemaText, setSchemaText] = useState("");
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
 
   // AI-build panel state.
   const [aiPrompt, setAiPrompt] = useState("");
@@ -89,6 +90,10 @@ export default function ToolsPage() {
   }, []);
 
   const builtins: ToolMeta[] = (meta?.tools ?? []).filter((t) => t.builtin);
+
+  const nameMatches = (n: string) => n.toLowerCase().includes(filter.trim().toLowerCase());
+  const visibleTools = tools.filter((t) => nameMatches(t.name));
+  const visibleBuiltins = builtins.filter((t) => nameMatches(t.name));
 
   const openEditor = (tool: CustomTool | null) => {
     setError("");
@@ -232,6 +237,12 @@ export default function ToolsPage() {
       <div className="toolbar">
         <h2>Tools</h2>
         <div className="spacer" />
+        <input
+          className="search-input"
+          placeholder="Filter by name…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
         <button className="primary" onClick={() => openEditor(null)}>
           New tool
         </button>
@@ -393,7 +404,7 @@ export default function ToolsPage() {
       )}
 
       <div className="card-list">
-        {tools.map((tool) => (
+        {visibleTools.map((tool) => (
           <div className="card" key={tool.id}>
             <div className="grow">
               <h4>
@@ -405,7 +416,9 @@ export default function ToolsPage() {
             <button className="danger" onClick={() => remove(tool)}>Delete</button>
           </div>
         ))}
-        {tools.length === 0 && <p className="muted">No custom tools yet.</p>}
+        {visibleTools.length === 0 && (
+          <p className="muted">{tools.length === 0 ? "No custom tools yet." : "No custom tools match your filter."}</p>
+        )}
       </div>
 
       <h3 style={{ marginTop: 28 }}>Builtin tools</h3>
@@ -413,7 +426,7 @@ export default function ToolsPage() {
         Provided by the platform and read-only. Listed here for reference.
       </p>
       <div className="card-list">
-        {builtins.map((tool) => (
+        {visibleBuiltins.map((tool) => (
           <div className="card" key={tool.name}>
             <div className="grow">
               <h4>
@@ -425,6 +438,9 @@ export default function ToolsPage() {
             </div>
           </div>
         ))}
+        {visibleBuiltins.length === 0 && builtins.length > 0 && (
+          <p className="muted">No builtin tools match your filter.</p>
+        )}
       </div>
 
       {showPicker && (

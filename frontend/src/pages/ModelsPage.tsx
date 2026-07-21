@@ -7,6 +7,7 @@ export default function ModelsPage() {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
 
   const reload = () => api.listModels().then(setModels).catch((e) => setError(e.message));
 
@@ -40,10 +41,21 @@ export default function ModelsPage() {
     }
   };
 
+  const visibleModels = models.filter((m) =>
+    m.name.toLowerCase().includes(filter.trim().toLowerCase())
+  );
+
   return (
     <div>
       <div className="toolbar">
         <h2>Models</h2>
+        <div className="spacer" />
+        <input
+          className="search-input"
+          placeholder="Filter by name…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
       </div>
       <p className="muted small" style={{ marginTop: -6 }}>
         The model ids suggested in the agent and tool-builder pickers. These are
@@ -57,7 +69,7 @@ export default function ModelsPage() {
         <div className="toolbar" style={{ marginTop: 6, marginBottom: 0, gap: 8, flexWrap: "wrap" }}>
           <input
             style={{ flex: "1 1 260px" }}
-            placeholder="e.g. claude-opus-4-8"
+            placeholder="e.g. eu.anthropic.claude-opus-4-8"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
@@ -71,7 +83,7 @@ export default function ModelsPage() {
       </div>
 
       <div className="card-list">
-        {models.map((model) => (
+        {visibleModels.map((model) => (
           <div className="card" key={model.id}>
             <div className="grow">
               <h4 className="mono">{model.name}</h4>
@@ -79,10 +91,11 @@ export default function ModelsPage() {
             <button className="danger" onClick={() => remove(model)}>Remove</button>
           </div>
         ))}
-        {models.length === 0 && (
+        {visibleModels.length === 0 && (
           <p className="muted">
-            No suggested models. Add one above — until you do, the built-in
-            defaults are offered.
+            {models.length === 0
+              ? "No suggested models. Add one above — until you do, the built-in defaults are offered."
+              : "No models match your filter."}
           </p>
         )}
       </div>

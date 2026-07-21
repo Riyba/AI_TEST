@@ -19,10 +19,11 @@ from .config import get_settings
 # is whatever the user has curated. Per-node model choice lets you use Sonnet
 # for reasoning steps and Haiku for cheap/fast steps.
 AVAILABLE_MODELS = [
-    "claude-opus-4-8",
-    "claude-sonnet-5",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5",
+    "eu.anthropic.claude-sonnet-5",
+    "eu.anthropic.claude-sonnet-4-6",
+    "eu.anthropic.claude-opus-4-8",
+    "eu.anthropic.claude-opus-4-7",
+    "eu.anthropic.claude-haiku-4-5-2025-1001-v1:0",
 ]
 
 

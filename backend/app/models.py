@@ -35,7 +35,7 @@ class Agent(Base):
     name: Mapped[str] = mapped_column(String(200))
     role: Mapped[str] = mapped_column(String(500), default="")
     system_prompt: Mapped[str] = mapped_column(Text, default="")
-    model: Mapped[str] = mapped_column(String(100), default="claude-sonnet-5")
+    model: Mapped[str] = mapped_column(String(100), default="eu.anthropic.claude-sonnet-5")
     # Cap on think/act turns in this agent's tool-use loop, per run.
     max_turns: Mapped[int] = mapped_column(Integer, default=10)
     # Token budget (input + output) for this agent per run; the loop stops
@@ -97,7 +97,7 @@ class SuggestedModel(Base):
     __tablename__ = "suggested_models"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # The model id as sent to the provider, e.g. "claude-sonnet-5".
+    # The model id as sent to the provider, e.g. "eu.anthropic.claude-sonnet-5".
     name: Mapped[str] = mapped_column(String(100), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

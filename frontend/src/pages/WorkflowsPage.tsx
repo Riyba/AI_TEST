@@ -6,6 +6,7 @@ import type { Workflow } from "../types";
 export default function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
   const navigate = useNavigate();
 
   const reload = () => api.listWorkflows().then(setWorkflows).catch((e) => setError(e.message));
@@ -39,8 +40,9 @@ export default function WorkflowsPage() {
     }
   };
 
-  const templates = workflows.filter((w) => w.is_template);
-  const own = workflows.filter((w) => !w.is_template);
+  const matches = (w: Workflow) => w.name.toLowerCase().includes(filter.trim().toLowerCase());
+  const templates = workflows.filter((w) => w.is_template && matches(w));
+  const own = workflows.filter((w) => !w.is_template && matches(w));
 
   const renderCard = (wf: Workflow) => (
     <div className="card" key={wf.id}>
@@ -64,6 +66,12 @@ export default function WorkflowsPage() {
       <div className="toolbar">
         <h2>Workflows</h2>
         <div className="spacer" />
+        <input
+          className="search-input"
+          placeholder="Filter by name…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
         <button className="primary" onClick={createNew}>New workflow</button>
       </div>
       {error && <div className="error-box">{error}</div>}

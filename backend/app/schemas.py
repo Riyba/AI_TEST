@@ -12,7 +12,7 @@ class AgentIn(BaseModel):
     name: str
     role: str = ""
     system_prompt: str = ""
-    model: str = "claude-sonnet-5"
+    model: str = "eu.anthropic.claude-sonnet-5"
     max_turns: int = Field(default=10, ge=1, le=100)
     max_tokens: int = Field(default=100_000, ge=1_000, le=10_000_000)
     tools: list[str] = Field(default_factory=list)
@@ -199,7 +199,7 @@ class ToolGenerateIn(BaseModel):
     # Staged attachment ids (uploaded via POST /api/attachments) to give the
     # model as reference material (API docs, examples, schemas…).
     attachment_ids: list[int] = Field(default_factory=list)
-    model: str = "claude-sonnet-5"
+    model: str = "eu.anthropic.claude-sonnet-5"
 
 
 class ToolDraft(BaseModel):
@@ -223,7 +223,7 @@ class ToolTestOut(BaseModel):
 
 
 class SuggestedModelIn(BaseModel):
-    # A model id offered in the UI's model pickers, e.g. "claude-sonnet-5".
+    # A model id offered in the UI's model pickers, e.g. "eu.anthropic.claude-sonnet-5".
     name: str
 
 

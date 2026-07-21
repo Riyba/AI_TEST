@@ -28,7 +28,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "coverage. Use your tools to read surrounding code for context before "
             "judging. Be specific — cite file and line. Order findings by severity."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 15,
         "max_tokens": 150_000,
         "tools": READ_TOOLS + GIT_READ_TOOLS,
@@ -43,7 +43,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "When asked to output a test file, output ONLY the raw file content — "
             "no markdown fences, no commentary."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 12,
         "max_tokens": 120_000,
         "tools": READ_TOOLS,
@@ -57,7 +57,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "Structure: Summary, Changes (bulleted), Rationale, Testing notes, "
             "Risks/rollback. Be accurate — only describe what the diff shows."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 8,
         "max_tokens": 80_000,
         "tools": ["read_file", "git_diff", "git_log"],
@@ -74,7 +74,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "cannot query live CVE feeds — reason from the manifests and your "
             "knowledge, and say so explicitly."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 12,
         "max_tokens": 120_000,
         "tools": READ_TOOLS,
@@ -89,7 +89,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "(readability, duplication, coupling, performance), and a sketch of the "
             "refactored code. NEVER apply changes — advice only."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 12,
         "max_tokens": 120_000,
         "tools": READ_TOOLS,
@@ -103,7 +103,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "identify the root cause and propose concrete fixes. Read source files "
             "with your tools as needed."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 12,
         "max_tokens": 120_000,
         "tools": READ_TOOLS,
@@ -113,7 +113,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
         "name": "Summarizer (fast)",
         "role": "Fast, cheap summarizer",
         "system_prompt": "Summarize the provided content concisely for a developer audience.",
-        "model": "claude-haiku-4-5",
+        "model": "eu.anthropic.claude-haiku-4-5-2025-1001-v1:0",
         "max_turns": 2,
         "max_tokens": 20_000,
         "tools": [],
@@ -132,7 +132,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "the literal heading 'QUESTIONS:' listing exactly what you need answered "
             "before implementation should start."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 15,
         "max_tokens": 120_000,
         "tools": READ_TOOLS + GIT_READ_TOOLS,
@@ -152,7 +152,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "outside your loop) — just leave the working tree in the state it should "
             "be committed from."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 30,
         "max_tokens": 300_000,
         "tools": READ_TOOLS + ["write_file", "run_command"],
@@ -172,7 +172,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "requesting changes, make sure the findings above are concrete enough for "
             "another engineer to act on without asking you anything further."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 15,
         "max_tokens": 150_000,
         "tools": READ_TOOLS + GIT_READ_TOOLS,
@@ -190,7 +190,7 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "attribute which agent produced which part when it helps. Do not attempt "
             "the specialist work yourself."
         ),
-        "model": "claude-sonnet-5",
+        "model": "eu.anthropic.claude-sonnet-5",
         "max_turns": 12,
         "max_tokens": 150_000,
         "tools": [],

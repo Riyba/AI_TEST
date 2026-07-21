@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import AttachmentsEditor from "../components/AttachmentsEditor";
 import type { Agent, AgentInput, Meta } from "../types";
@@ -47,6 +47,8 @@ export default function AgentsPage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [editing, setEditing] = useState<{ id: number | null; data: AgentInput } | null>(null);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const reload = () => api.listAgents().then(setAgents).catch((e) => setError(e.message));
 
@@ -54,6 +56,10 @@ export default function AgentsPage() {
     reload();
     api.meta().then(setMeta).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (editing) panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [editing]);
 
   const save = async () => {
     if (!editing) return;
@@ -81,11 +87,21 @@ export default function AgentsPage() {
   const set = (patch: Partial<AgentInput>) =>
     setEditing((cur) => (cur ? { ...cur, data: { ...cur.data, ...patch } } : cur));
 
+  const visibleAgents = agents.filter((a) =>
+    a.name.toLowerCase().includes(filter.trim().toLowerCase())
+  );
+
   return (
     <div>
       <div className="toolbar">
         <h2>Agents</h2>
         <div className="spacer" />
+        <input
+          className="search-input"
+          placeholder="Filter by name…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
         <button className="primary" onClick={() => setEditing({ id: null, data: { ...EMPTY } })}>
           New agent
         </button>
@@ -93,7 +109,7 @@ export default function AgentsPage() {
       {error && <div className="error-box">{error}</div>}
 
       {editing && (
-        <div className="panel" style={{ marginBottom: 20 }}>
+        <div className="panel" style={{ marginBottom: 20 }} ref={panelRef}>
           <h3 style={{ marginTop: 0 }}>{editing.id === null ? "New agent" : "Edit agent"}</h3>
           <div className="form-grid">
             <div>
@@ -211,7 +227,7 @@ export default function AgentsPage() {
       )}
 
       <div className="card-list">
-        {agents.map((agent) => (
+        {visibleAgents.map((agent) => (
           <div className="card" key={agent.id}>
             <div className="grow">
               <h4>
@@ -246,7 +262,9 @@ export default function AgentsPage() {
             <button className="danger" onClick={() => remove(agent.id)}>Delete</button>
           </div>
         ))}
-        {agents.length === 0 && <p className="muted">No agents yet.</p>}
+        {visibleAgents.length === 0 && (
+          <p className="muted">{agents.length === 0 ? "No agents yet." : "No agents match your filter."}</p>
+        )}
       </div>
     </div>
   );
