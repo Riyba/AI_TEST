@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  BaseEdge,
   Background,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   Position,
   ReactFlow,
+  getBezierPath,
+  getSmoothStepPath,
   useEdgesState,
   useNodesState,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from "@xyflow/react";
@@ -36,7 +41,67 @@ function WfNodeView({ data, selected }: NodeProps<WfNode>) {
   );
 }
 
+type WfEdgeData = { backward?: boolean; offset?: number };
+
+// Backward (loop-back) edges get routed below the row instead of the default
+// bezier, which would otherwise cut straight back through intervening nodes.
+function WfEdgeView({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  label,
+  data,
+}: EdgeProps<Edge<WfEdgeData>>) {
+  const backward = data?.backward ?? false;
+  const [path, labelX, labelY] = backward
+    ? getSmoothStepPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+        borderRadius: 12,
+        centerY: Math.max(sourceY, targetY) + 60 + (data?.offset ?? 0) * 30,
+      })
+    : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        style={
+          backward
+            ? { stroke: "var(--amber)", strokeWidth: 1.5, strokeDasharray: "6 4" }
+            : undefined
+        }
+      />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div
+            className="wf-edge-label"
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            }}
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  );
+}
+
 const nodeTypes = { wf: WfNodeView };
+const edgeTypes = { wf: WfEdgeView };
 
 const DEFAULTS: Record<NodeType, Partial<NodeSpec>> = {
   agent: { prompt: "{task}" },
@@ -244,6 +309,21 @@ export default function WorkflowEditorPage() {
     [nodes, selectedId],
   );
 
+  // Mark edges whose target sits at or before the source's x position as
+  // "backward" so WfEdgeView can route them around instead of through nodes,
+  // and stagger the ones that dip below the row so they don't overlap.
+  const displayEdges = useMemo(() => {
+    const positionById = new Map(nodes.map((n) => [n.id, n.position]));
+    let backwardCount = 0;
+    return edges.map((edge) => {
+      const source = positionById.get(edge.source);
+      const target = positionById.get(edge.target);
+      const backward = !!source && !!target && target.x < source.x;
+      const data: WfEdgeData = { backward, offset: backward ? backwardCount++ : 0 };
+      return { ...edge, type: "wf", data };
+    });
+  }, [edges, nodes]);
+
   if (!workflow) return <p className="muted">{error || "Loading…"}</p>;
 
   return (
@@ -271,8 +351,9 @@ export default function WorkflowEditorPage() {
         <div className="editor-canvas">
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={displayEdges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
