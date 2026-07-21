@@ -1,5 +1,6 @@
 import type {
   Agent,
+  AgentExport,
   AgentInput,
   Attachment,
   CustomTool,
@@ -12,8 +13,10 @@ import type {
   RunDetail,
   SuggestedModel,
   ToolDraft,
+  ToolExport,
   ToolTestResult,
   Workflow,
+  WorkflowExport,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -88,6 +91,9 @@ export const api = {
     request<Agent>(`/api/agents/${id}`, { method: "PUT", body: JSON.stringify(a) }),
   deleteAgent: (id: number) =>
     request<void>(`/api/agents/${id}`, { method: "DELETE" }),
+  exportAgent: (id: number) => request<AgentExport>(`/api/agents/${id}/export`),
+  importAgent: (payload: AgentExport) =>
+    request<Agent>("/api/agents/import", { method: "POST", body: JSON.stringify(payload) }),
 
   listWorkflows: () => request<Workflow[]>("/api/workflows"),
   getWorkflow: (id: number) => request<Workflow>(`/api/workflows/${id}`),
@@ -105,6 +111,9 @@ export const api = {
     request<void>(`/api/workflows/${id}`, { method: "DELETE" }),
   cloneWorkflow: (id: number) =>
     request<Workflow>(`/api/workflows/${id}/clone`, { method: "POST" }),
+  exportWorkflow: (id: number) => request<WorkflowExport>(`/api/workflows/${id}/export`),
+  importWorkflow: (payload: WorkflowExport) =>
+    request<Workflow>("/api/workflows/import", { method: "POST", body: JSON.stringify(payload) }),
 
   listRuns: () => request<Run[]>("/api/runs"),
   getRun: (id: number) => request<RunDetail>(`/api/runs/${id}`),
@@ -144,6 +153,9 @@ export const api = {
     request<void>(`/api/tools/${id}${force ? "?force=true" : ""}`, {
       method: "DELETE",
     }),
+  exportTool: (id: number) => request<ToolExport>(`/api/tools/${id}/export`),
+  importTool: (payload: ToolExport) =>
+    request<CustomTool>("/api/tools/import", { method: "POST", body: JSON.stringify(payload) }),
   generateTool: (payload: {
     prompt: string;
     attachment_ids?: number[];

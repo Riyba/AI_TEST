@@ -193,6 +193,32 @@ class CustomToolOut(CustomToolIn):
     updated_at: datetime
 
 
+class ToolExport(BaseModel):
+    format: Literal["tool"] = "tool"
+    version: int = 1
+    tool: CustomToolIn
+
+
+class AgentExport(BaseModel):
+    format: Literal["agent"] = "agent"
+    version: int = 1
+    agent: AgentIn
+    # Custom tool definitions referenced by agent.tools, so the export is
+    # self-contained (builtin tool names need no bundling).
+    tools: list[CustomToolIn] = Field(default_factory=list)
+
+
+class WorkflowExport(BaseModel):
+    format: Literal["workflow"] = "workflow"
+    version: int = 1
+    workflow: WorkflowIn
+    # Agents referenced by the graph (via agent_id/team), each tagged with
+    # its original id so the graph can be remapped on import.
+    agents: list[dict[str, Any]] = Field(default_factory=list)
+    # Custom tools referenced by the bundled agents or by tool nodes.
+    tools: list[CustomToolIn] = Field(default_factory=list)
+
+
 class ToolGenerateIn(BaseModel):
     # Natural-language description of the tool to build.
     prompt: str

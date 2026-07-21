@@ -234,6 +234,27 @@ export interface ToolTestResult {
   output: string;
 }
 
+export interface ToolExport {
+  format: "tool";
+  version: number;
+  tool: CustomToolInput;
+}
+
+export interface AgentExport {
+  format: "agent";
+  version: number;
+  agent: AgentInput;
+  tools: CustomToolInput[];
+}
+
+export interface WorkflowExport {
+  format: "workflow";
+  version: number;
+  workflow: { name: string; description: string; graph: GraphSpec | Record<string, never> };
+  agents: Array<AgentInput & { id: number }>;
+  tools: CustomToolInput[];
+}
+
 export interface SuggestedModel {
   id: number;
   name: string;

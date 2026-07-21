@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import DirectoryPicker from "../components/DirectoryPicker";
-import type { CustomTool, CustomToolInput, Meta, ToolMeta } from "../types";
+import { downloadJson, pickJsonFile, slugForFilename } from "../lib/exportFile";
+import type { CustomTool, CustomToolInput, Meta, ToolExport, ToolMeta } from "../types";
 
 const STARTER_SCHEMA = {
   type: "object",
@@ -175,6 +176,29 @@ export default function ToolsPage() {
     }
   };
 
+  const exportTool = async (tool: CustomTool) => {
+    setError("");
+    try {
+      const data = await api.exportTool(tool.id);
+      downloadJson(`tool-${slugForFilename(tool.name)}.json`, data);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const importTool = async () => {
+    setError("");
+    try {
+      const data = (await pickJsonFile()) as ToolExport;
+      if (data.format !== "tool") throw new Error(`Not a tool export (format: "${data.format}")`);
+      const saved = await api.importTool(data);
+      await reload();
+      openEditor(saved);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const uploadRefFile = async (file: File) => {
     setError("");
     try {
@@ -243,6 +267,7 @@ export default function ToolsPage() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        <button onClick={importTool}>Import</button>
         <button className="primary" onClick={() => openEditor(null)}>
           New tool
         </button>
@@ -413,6 +438,7 @@ export default function ToolsPage() {
               <p>{tool.description || <span className="muted">No description</span>}</p>
             </div>
             <button onClick={() => openEditor(tool)}>Edit</button>
+            <button onClick={() => exportTool(tool)}>Export</button>
             <button className="danger" onClick={() => remove(tool)}>Delete</button>
           </div>
         ))}

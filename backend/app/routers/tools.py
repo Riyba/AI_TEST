@@ -19,11 +19,13 @@ from ..attachments import AttachmentContent
 from ..db import get_session
 from ..llm import get_provider
 from ..models import Agent, Attachment, CustomTool, Workflow
+from ..portability import unique_name
 from ..runner import validate_repo_path
 from ..schemas import (
     CustomToolIn,
     CustomToolOut,
     ToolDraft,
+    ToolExport,
     ToolGenerateIn,
     ToolTestIn,
     ToolTestOut,
@@ -165,6 +167,35 @@ async def delete_tool(
     await session.delete(tool)
     await session.commit()
     await _resync(session)
+
+
+@router.get("/{tool_id}/export", response_model=ToolExport)
+async def export_tool(
+    tool_id: int, session: AsyncSession = Depends(get_session)
+) -> ToolExport:
+    tool = await session.get(CustomTool, tool_id)
+    if tool is None:
+        raise HTTPException(404, "tool not found")
+    return ToolExport(tool=CustomToolIn.model_validate(tool, from_attributes=True))
+
+
+@router.post("/import", response_model=CustomToolOut, status_code=201)
+async def import_tool(
+    payload: ToolExport, session: AsyncSession = Depends(get_session)
+) -> CustomTool:
+    existing_names = set(
+        (await session.execute(select(CustomTool.name))).scalars().all()
+    )
+    data = payload.tool.model_dump()
+    data["name"] = unique_name(data["name"].strip(), existing_names, "snake")
+    tool_in = CustomToolIn(**data)
+    _validate(tool_in)
+    tool = CustomTool(**tool_in.model_dump())
+    session.add(tool)
+    await session.commit()
+    await session.refresh(tool)
+    await _resync(session)
+    return tool
 
 
 @router.post("/generate", response_model=ToolDraft)

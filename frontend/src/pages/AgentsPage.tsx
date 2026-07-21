@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import AttachmentsEditor from "../components/AttachmentsEditor";
-import type { Agent, AgentInput, Meta } from "../types";
+import { downloadJson, pickJsonFile, slugForFilename } from "../lib/exportFile";
+import type { Agent, AgentExport, AgentInput, Meta } from "../types";
 
 const EMPTY: AgentInput = {
   name: "",
@@ -84,6 +85,27 @@ export default function AgentsPage() {
     }
   };
 
+  const exportAgent = async (agent: Agent) => {
+    try {
+      const data = await api.exportAgent(agent.id);
+      downloadJson(`agent-${slugForFilename(agent.name)}.json`, data);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const importAgent = async () => {
+    setError("");
+    try {
+      const data = (await pickJsonFile()) as AgentExport;
+      if (data.format !== "agent") throw new Error(`Not an agent export (format: "${data.format}")`);
+      await api.importAgent(data);
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const set = (patch: Partial<AgentInput>) =>
     setEditing((cur) => (cur ? { ...cur, data: { ...cur.data, ...patch } } : cur));
 
@@ -102,6 +124,7 @@ export default function AgentsPage() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        <button onClick={importAgent}>Import</button>
         <button className="primary" onClick={() => setEditing({ id: null, data: { ...EMPTY } })}>
           New agent
         </button>
@@ -259,6 +282,7 @@ export default function AgentsPage() {
             >
               Edit
             </button>
+            <button onClick={() => exportAgent(agent)}>Export</button>
             <button className="danger" onClick={() => remove(agent.id)}>Delete</button>
           </div>
         ))}
