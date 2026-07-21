@@ -16,6 +16,8 @@ FastAPI routers ── runner.RunManager ── LangGraph StateGraph
 
 ## Data model (SQLite, `backend/data/app.db`)
 
+> See [DATABASE.md](DATABASE.md) for full table/column reference.
+
 - **agents** — name, role, system prompt, model, per-run limits (`max_turns`,
   `max_tokens`), tool permissions, `require_approval` (safe mode).
 - **workflows** — a `graph` JSON column holding the GraphSpec below. `is_template`
