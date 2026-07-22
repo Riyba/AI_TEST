@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import OverflowMenu from "../OverflowMenu";
 import { api } from "../api";
 import { downloadJson, pickJsonFile, slugForFilename } from "../lib/exportFile";
 import type { Workflow, WorkflowExport } from "../types";
@@ -67,21 +68,52 @@ export default function WorkflowsPage() {
   const templates = workflows.filter((w) => w.is_template && matches(w));
   const own = workflows.filter((w) => !w.is_template && matches(w));
 
+  // Templates are read-only — clicking the name opens the read-only viewer, and
+  // the only way to change one is to Clone it. Own workflows open in the editor.
+  const linkFor = (wf: Workflow) =>
+    wf.is_template ? `/workflows/${wf.id}?view=1` : `/workflows/${wf.id}`;
+
   const renderCard = (wf: Workflow) => (
     <div className="card" key={wf.id}>
       <div className="grow">
         <h4>
-          <Link to={`/workflows/${wf.id}`}>{wf.name}</Link>{" "}
+          <Link to={linkFor(wf)}>{wf.name}</Link>{" "}
           {wf.is_template && <span className="badge template">template</span>}
         </h4>
         <p>{wf.description || "No description"}</p>
       </div>
-      <button onClick={() => navigate(`/runs/new?workflow=${wf.id}`)}>Run</button>
-      <button onClick={() => clone(wf.id)}>Clone</button>
-      <button onClick={() => exportWorkflow(wf)}>Export</button>
-      {!wf.is_template && (
-        <button className="danger" onClick={() => remove(wf.id)}>Delete</button>
-      )}
+      <button className="primary" onClick={() => navigate(`/runs/new?workflow=${wf.id}`)}>
+        Run
+      </button>
+      <OverflowMenu>
+        {(close) => (
+          <>
+            {wf.is_template ? (
+              <button role="menuitem" onClick={() => { close(); navigate(`/workflows/${wf.id}?view=1`); }}>
+                View
+              </button>
+            ) : (
+              <button role="menuitem" onClick={() => { close(); navigate(`/workflows/${wf.id}`); }}>
+                Edit
+              </button>
+            )}
+            <button role="menuitem" onClick={() => { close(); clone(wf.id); }}>
+              Clone
+            </button>
+            <button role="menuitem" onClick={() => { close(); exportWorkflow(wf); }}>
+              Export
+            </button>
+            {!wf.is_template && (
+              <>
+                <div className="overflow-divider" />
+                <button className="danger" role="menuitem" onClick={() => { close(); remove(wf.id); }}>
+                  Delete
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </OverflowMenu>
     </div>
   );
 
@@ -110,8 +142,9 @@ export default function WorkflowsPage() {
 
       <h3>Templates</h3>
       <p className="muted small">
-        Starter SDLC workflows. Clone one to customize it — templates are editable too, but
-        cloning keeps the original intact.
+        Read-only starter SDLC workflows. <b>View</b> one to inspect it, or <b>Clone</b> to
+        make an editable copy — templates themselves can't be changed, so the original always
+        stays intact.
       </p>
       <div className="card-list">{templates.map(renderCard)}</div>
     </div>

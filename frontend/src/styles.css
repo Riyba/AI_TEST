@@ -127,6 +127,21 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
 .toolbar .spacer { flex: 1; }
 
+/* Read-only viewer banner — nudges toward Clone to edit. */
+.view-banner {
+  display: flex; align-items: center; gap: 12px; margin: 8px 0 16px;
+  padding: 10px 14px; border-radius: 8px; font-size: 13px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.view-banner span { flex: 1; }
+.view-banner button { flex: 0 0 auto; }
+
+/* A fieldset used purely to disable its controls — strip its native chrome. */
+.field-reset { min-width: 0; margin: 0; }
+.field-reset:disabled { opacity: 1; }
+
 .card-list { display: flex; flex-direction: column; gap: 10px; }
 .card {
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;
@@ -136,6 +151,29 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 .card .grow { flex: 1; min-width: 0; }
 .card h4 { margin: 0 0 2px; font-size: 15px; }
 .card p { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* Card overflow (⋯) menu — secondary card actions */
+.overflow { position: relative; flex-shrink: 0; }
+.overflow-trigger {
+  padding: 6px 10px; line-height: 1; font-size: 16px;
+  background: var(--bg-raised); color: var(--muted); border: 1px solid var(--border);
+}
+.overflow-trigger:hover { border-color: var(--accent); color: var(--text); }
+.overflow-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 140px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px; box-shadow: var(--shadow); z-index: 20;
+}
+.overflow-menu.drop-up { top: auto; bottom: calc(100% + 6px); }
+.overflow-menu button {
+  width: 100%; text-align: left;
+  background: transparent; border: none; border-radius: 6px;
+  padding: 7px 10px; font-size: 13px; color: var(--text);
+}
+.overflow-menu button:hover { background: var(--bg-raised); }
+.overflow-menu button.danger:hover { color: var(--red); }
+.overflow-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
 .badge {
   display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px;

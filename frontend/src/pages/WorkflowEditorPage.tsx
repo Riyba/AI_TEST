@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   BaseEdge,
   Background,
@@ -135,6 +135,7 @@ export default function WorkflowEditorPage() {
   const workflowId = Number(id);
   const [theme] = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -306,6 +307,16 @@ export default function WorkflowEditorPage() {
     }
   };
 
+  const clone = async () => {
+    setError("");
+    try {
+      const copy = await api.cloneWorkflow(workflowId);
+      navigate(`/workflows/${copy.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const selected = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
@@ -328,6 +339,10 @@ export default function WorkflowEditorPage() {
 
   if (!workflow) return <p className="muted">{error || "Loading…"}</p>;
 
+  // Templates can never be edited in place — you must clone them first. The
+  // ?view=1 param opens any workflow in the same read-only mode.
+  const readOnly = workflow.is_template || searchParams.get("view") === "1";
+
   return (
     <div>
       <div className="toolbar">
@@ -335,19 +350,38 @@ export default function WorkflowEditorPage() {
           style={{ width: 260 }}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          disabled={readOnly}
         />
         {workflow.is_template && <span className="badge template">template</span>}
+        {readOnly && <span className="badge">read-only</span>}
         <div className="spacer" />
-        <span className="muted small">{status}</span>
-        <button onClick={() => addNode("agent")}>+ Agent</button>
-        <button onClick={() => addNode("orchestrator")}>+ Orchestrator</button>
-        <button onClick={() => addNode("tool")}>+ Tool</button>
-        <button onClick={() => addNode("condition")}>+ Condition</button>
-        <button onClick={() => addNode("approval")}>+ Approval</button>
-        <button className="primary" onClick={save}>Save</button>
+        {readOnly ? (
+          <button className="primary" onClick={clone}>Clone to edit</button>
+        ) : (
+          <>
+            <span className="muted small">{status}</span>
+            <button onClick={() => addNode("agent")}>+ Agent</button>
+            <button onClick={() => addNode("orchestrator")}>+ Orchestrator</button>
+            <button onClick={() => addNode("tool")}>+ Tool</button>
+            <button onClick={() => addNode("condition")}>+ Condition</button>
+            <button onClick={() => addNode("approval")}>+ Approval</button>
+            <button className="primary" onClick={save}>Save</button>
+          </>
+        )}
         <button onClick={() => navigate(`/runs/new?workflow=${workflowId}`)}>Run…</button>
       </div>
       {error && <div className="error-box">{error}</div>}
+      {readOnly && (
+        <div className="view-banner">
+          <span>
+            {workflow.is_template
+              ? "This is a template — it can't be edited directly. "
+              : "You're viewing this workflow in read-only mode. "}
+            Clone it to make your own editable copy; the original stays intact.
+          </span>
+          <button className="primary" onClick={clone}>Clone to edit</button>
+        </div>
+      )}
 
       <div className="editor-layout">
         <div className="editor-canvas">
@@ -361,7 +395,10 @@ export default function WorkflowEditorPage() {
             onConnect={onConnect}
             onNodeClick={(_, node) => setSelectedId(node.id)}
             onPaneClick={() => setSelectedId(null)}
-            deleteKeyCode={["Backspace", "Delete"]}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            edgesReconnectable={!readOnly}
+            deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
             fitView
             colorMode={theme}
             proOptions={{ hideAttribution: true }}
@@ -372,7 +409,7 @@ export default function WorkflowEditorPage() {
         </div>
 
         <div className="editor-side">
-          <div className="panel">
+          <fieldset className="panel field-reset" disabled={readOnly}>
             <label>Description</label>
             <textarea
               rows={2}
@@ -387,10 +424,10 @@ export default function WorkflowEditorPage() {
                 </option>
               ))}
             </select>
-          </div>
+          </fieldset>
 
           {selected ? (
-            <div className="panel" style={{ marginTop: 12 }}>
+            <fieldset className="panel field-reset" style={{ marginTop: 12 }} disabled={readOnly}>
               <h3 style={{ marginTop: 0 }}>
                 {selected.data.spec.type} node <span className="muted">({selected.id})</span>
               </h3>
@@ -405,13 +442,16 @@ export default function WorkflowEditorPage() {
                 meta={meta}
                 onChange={(patch) => updateSpec(selected.id, patch)}
               />
-              <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
-                <button className="danger" onClick={deleteSelected}>Delete node</button>
-              </div>
-            </div>
+              {!readOnly && (
+                <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
+                  <button className="danger" onClick={deleteSelected}>Delete node</button>
+                </div>
+              )}
+            </fieldset>
           ) : (
             <p className="muted small" style={{ padding: 12 }}>
-              Select a node to edit it. Drag between node handles to connect. Placeholders
+              {readOnly ? "Select a node to inspect it. " : "Select a node to edit it. Drag between node handles to connect. "}
+              Placeholders
               usable in prompts and tool params: {"{task}"}, {"{repo_path}"},{" "}
               {"{last_output}"}, and {"{<node_id>}"} for any earlier node's output.
             </p>
