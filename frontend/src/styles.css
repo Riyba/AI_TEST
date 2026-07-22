@@ -166,6 +166,44 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 .split .main-col { flex: 1; min-width: 0; }
 .split .side-col { width: 380px; flex-shrink: 0; }
 
+@media (max-width: 720px) {
+  .split { flex-direction: column; }
+  .split .side-col { width: 100%; }
+}
+
+/* run header: status + elapsed + step progress */
+.run-status-bar {
+  display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;
+}
+.run-status-bar .stat { display: flex; flex-direction: column; gap: 4px; }
+.run-status-bar .stat.grow { flex: 1; min-width: 160px; }
+.run-status-bar .stat .label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+}
+.run-status-bar .stat .value { font-size: 15px; font-variant-numeric: tabular-nums; }
+.progress-track {
+  height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.progress-fill { height: 100%; background: var(--green); transition: width 0.3s ease; }
+.progress-fill.failed { background: var(--red); }
+
+/* static run metadata as labeled tiles */
+.stat-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.stat-tile {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; min-width: 0;
+}
+.stat-tile .label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); margin-bottom: 3px;
+}
+.stat-tile .value { font-size: 14px; word-break: break-word; }
+
 .panel {
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: 8px; padding: 16px; box-shadow: var(--shadow);
@@ -207,7 +245,10 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px
 }
 
 /* trace */
-.trace { display: flex; flex-direction: column; gap: 6px; }
+.trace {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 420px; overflow-y: auto;
+}
 .trace-event {
   border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px;
   padding: 8px 12px; font-size: 13px; background: var(--bg-panel);

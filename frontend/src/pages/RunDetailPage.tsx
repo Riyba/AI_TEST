@@ -6,6 +6,16 @@ import type { ApprovalPayload, RunDetail, RunEvent, RunStatus } from "../types";
 
 const TERMINAL: RunStatus[] = ["succeeded", "failed", "rejected", "cancelled"];
 
+function formatDuration(ms: number): string {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
 export default function RunDetailPage() {
   const { id } = useParams();
   const runId = Number(id);
@@ -17,11 +27,13 @@ export default function RunDetailPage() {
   const [timeSavedPrompt, setTimeSavedPrompt] = useState(false);
   const [savingTime, setSavingTime] = useState(false);
   const [datadogConfigured, setDatadogConfigured] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     api.meta().then((m) => setDatadogConfigured(m.datadog_configured)).catch(() => undefined);
   }, []);
   const sourceRef = useRef<EventSource | null>(null);
+  const traceRef = useRef<HTMLDivElement | null>(null);
   // Only prompt for an estimate when the run finished while being watched;
   // already-finished runs are edited from Run history instead.
   const sawActiveRef = useRef(false);
@@ -62,6 +74,19 @@ export default function RunDetailPage() {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Tick a clock once a second while the run is active so elapsed time stays live.
+  useEffect(() => {
+    if (!run || TERMINAL.includes(run.status)) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [run?.status]);
+
+  // Keep the live trace pinned to the newest event while the run is active.
+  useEffect(() => {
+    const el = traceRef.current;
+    if (el && run && !TERMINAL.includes(run.status)) el.scrollTop = el.scrollHeight;
+  }, [events.length, run?.status]);
 
   useEffect(() => {
     if (!run || sourceRef.current) return;
@@ -106,6 +131,13 @@ export default function RunDetailPage() {
   if (!run) return <p className="muted">{error || "Loading…"}</p>;
 
   const active = !TERMINAL.includes(run.status);
+  const doneSteps = run.steps.filter((s) => s.finished_at).length;
+  const totalSteps = run.steps.length;
+  const progressPct = totalSteps ? Math.round((doneSteps / totalSteps) * 100) : 0;
+  const startMs = Date.parse(run.created_at);
+  const endMs = run.finished_at ? Date.parse(run.finished_at) : now;
+  const elapsed = Number.isNaN(startMs) ? null : formatDuration(endMs - startMs);
+  const failed = ["failed", "rejected", "cancelled"].includes(run.status);
 
   return (
     <div>
@@ -126,19 +158,64 @@ export default function RunDetailPage() {
       </div>
       {error && <div className="error-box">{error}</div>}
       {run.error && <div className="error-box">{run.error}</div>}
-      <p className="muted small">
-        repo: {run.input.repo_path} · task: {run.input.task || "(none)"} · tokens:{" "}
-        {run.total_input_tokens} in / {run.total_output_tokens} out · time saved:{" "}
-        {formatTimeSaved(run.time_saved_minutes)}
+
+      <div className="run-status-bar">
+        <div className="stat">
+          <span className="label">Status</span>
+          <span className={`badge ${run.status}`}>{run.status}</span>
+        </div>
+        {elapsed && (
+          <div className="stat">
+            <span className="label">{active ? "Elapsed" : "Duration"}</span>
+            <span className="value">{elapsed}</span>
+          </div>
+        )}
+        <div className="stat grow">
+          <span className="label">
+            Steps · {doneSteps}/{totalSteps} done
+          </span>
+          <div className="progress-track">
+            <div
+              className={`progress-fill${failed ? " failed" : ""}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="stat-tiles">
+        <div className="stat-tile">
+          <div className="label">Repo</div>
+          <div className="value">{run.input.repo_path || "—"}</div>
+        </div>
+        <div className="stat-tile">
+          <div className="label">Task</div>
+          <div className="value">{run.input.task || "(none)"}</div>
+        </div>
+        <div className="stat-tile">
+          <div className="label">Tokens</div>
+          <div className="value">
+            {run.total_input_tokens.toLocaleString()} in /{" "}
+            {run.total_output_tokens.toLocaleString()} out
+          </div>
+        </div>
+        <div className="stat-tile">
+          <div className="label">Time saved</div>
+          <div className="value">{formatTimeSaved(run.time_saved_minutes)}</div>
+        </div>
         {datadogConfigured && !active && (
-          <> · Datadog: {run.synced_to_datadog ? "synced ✓" : "not synced"}</>
+          <div className="stat-tile">
+            <div className="label">Datadog</div>
+            <div className="value">{run.synced_to_datadog ? "synced ✓" : "not synced"}</div>
+          </div>
         )}
         {run.attachments && run.attachments.length > 0 && (
-          <>
-            {" "}· attachments: {run.attachments.map((a) => a.filename).join(", ")}
-          </>
+          <div className="stat-tile">
+            <div className="label">Attachments</div>
+            <div className="value">{run.attachments.map((a) => a.filename).join(", ")}</div>
+          </div>
         )}
-      </p>
+      </div>
 
       {timeSavedPrompt && (
         <div className="time-saved-prompt">
@@ -174,25 +251,13 @@ export default function RunDetailPage() {
       )}
       {run.status === "waiting_approval" && !approval && (
         <div className="warn" style={{ marginBottom: 12 }}>
-          This run is waiting for approval, but the approval prompt was lost (server
-          restart). Re-open it from the live stream is not possible — cancel and re-run.
+          This run is waiting for approval, but the approval prompt was lost (likely a
+          server restart). It can't be reopened from the live stream — cancel and re-run.
         </div>
       )}
 
       <div className="split">
         <div className="main-col">
-          <h3>Live trace</h3>
-          {events.length === 0 && (
-            <p className="muted small">
-              {active ? "Waiting for events…" : "No live events (finished run) — see steps below."}
-            </p>
-          )}
-          <div className="trace">
-            {events.map((event) => (
-              <TraceEvent key={event.seq} event={event} />
-            ))}
-          </div>
-
           <h3>Steps</h3>
           <table className="step-table">
             <thead>
@@ -206,15 +271,20 @@ export default function RunDetailPage() {
                   <td>{step.name}</td>
                   <td className="muted">{step.node_type}</td>
                   <td><span className={`badge ${step.status}`}>{step.status}</span></td>
-                  <td className="muted">
+                  <td className="muted num">
                     {step.input_tokens + step.output_tokens > 0
-                      ? `${step.input_tokens}/${step.output_tokens}`
+                      ? `${step.input_tokens.toLocaleString()}/${step.output_tokens.toLocaleString()}`
                       : "–"}
                   </td>
                   <td>
                     <details className="raw">
                       <summary>in / out / tool calls</summary>
-                      <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>
+                      <pre
+                        style={{
+                          whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 260,
+                          overflow: "auto", background: "var(--bg)", padding: 8, borderRadius: 4,
+                        }}
+                      >
                         {JSON.stringify(
                           { input: step.input, output: step.output, tool_calls: step.tool_calls },
                           null,
@@ -247,6 +317,18 @@ export default function RunDetailPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      <h3>Live trace</h3>
+      {events.length === 0 && (
+        <p className="muted small">
+          {active ? "Waiting for events…" : "No live events (finished run) — see steps above."}
+        </p>
+      )}
+      <div className="trace" ref={traceRef}>
+        {events.map((event) => (
+          <TraceEvent key={event.seq} event={event} />
+        ))}
       </div>
     </div>
   );
