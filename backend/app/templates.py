@@ -138,6 +138,21 @@ AGENT_SEEDS: list[dict[str, Any]] = [
         "tools": READ_TOOLS + GIT_READ_TOOLS,
     },
     {
+        "key": "branch_namer",
+        "name": "Branch Namer (fast)",
+        "role": "Names a git feature branch from a task description",
+        "system_prompt": (
+            "You turn a feature request into a short git branch name. Output ONLY the "
+            "name — three to five lowercase words joined by hyphens (kebab-case), no "
+            "'feature/' prefix, no quotes, no punctuation, no explanation. Example: for "
+            "'Add rate limiting to the login endpoint' output 'rate-limit-login-endpoint'."
+        ),
+        "model": "eu.anthropic.claude-haiku-4-5-2025-1001-v1:0",
+        "max_turns": 1,
+        "max_tokens": 2_000,
+        "tools": [],
+    },
+    {
         "key": "developer",
         "name": "Developer",
         "role": "Engineer who implements an approved plan end-to-end",
@@ -400,13 +415,21 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                         ),
                     ),
                     _node(
-                        "branch", "tool", "Create branch", 560, 200,
+                        "branch_name", "agent", "Name the branch", 560, 200,
+                        agent_id=agent_ids["branch_namer"],
+                        prompt=(
+                            "Feature request: {task}\n\nApproved plan:\n{plan_gate}\n\n"
+                            "Output a short kebab-case branch name for this work."
+                        ),
+                    ),
+                    _node(
+                        "branch", "tool", "Create branch", 840, 200,
                         tool="git_create_branch",
-                        params={"base": "dev", "name": "{task}"},
+                        params={"base": "dev", "name": "{branch_name}"},
                         require_approval=False,
                     ),
                     _node(
-                        "develop", "agent", "Implement changes", 840, 200,
+                        "develop", "agent", "Implement changes", 1120, 200,
                         agent_id=agent_ids["developer"],
                         prompt=(
                             "Task: {task}\n\nApproved plan:\n{plan_gate}\n\n"
@@ -417,19 +440,19 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                         ),
                     ),
                     _node(
-                        "unit_tests", "tool", "Run unit tests", 1120, 200,
+                        "unit_tests", "tool", "Run unit tests", 1400, 200,
                         tool="run_tests", params={}, require_approval=False,
                     ),
                     _node(
-                        "tests_gate", "condition", "Tests passed?", 1400, 200,
+                        "tests_gate", "condition", "Tests passed?", 1680, 200,
                         predicate={"kind": "tool_success"},
                     ),
                     _node(
-                        "diff_for_review", "tool", "Get diff", 1680, 80,
+                        "diff_for_review", "tool", "Get diff", 1960, 80,
                         tool="git_diff", params={},
                     ),
                     _node(
-                        "code_review", "agent", "Review changes", 1960, 80,
+                        "code_review", "agent", "Review changes", 2240, 80,
                         agent_id=agent_ids["pr_reviewer"],
                         prompt=(
                             "Task: {task}\n\nApproved plan:\n{plan_gate}\n\n"
@@ -438,7 +461,7 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                         ),
                     ),
                     _node(
-                        "review_gate", "condition", "Review approved?", 2240, 80,
+                        "review_gate", "condition", "Review approved?", 2520, 80,
                         predicate={
                             "kind": "output_contains",
                             "value": "VERDICT: APPROVE",
@@ -446,7 +469,7 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                         },
                     ),
                     _node(
-                        "pr_description", "agent", "Write PR description", 2520, 80,
+                        "pr_description", "agent", "Write PR description", 2800, 80,
                         agent_id=agent_ids["pr_writer"],
                         prompt=(
                             "Context: {task}\n\nDiff:\n{diff_for_review}\n\n"
@@ -454,16 +477,16 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                         ),
                     ),
                     _node(
-                        "commit", "tool", "Commit changes", 2800, 80,
+                        "commit", "tool", "Commit changes", 3080, 80,
                         tool="git_commit", params={"message": "{task}"},
                         require_approval=False,
                     ),
                     _node(
-                        "push", "tool", "Push branch", 3080, 80,
+                        "push", "tool", "Push branch", 3360, 80,
                         tool="git_push", params={}, require_approval=False,
                     ),
                     _node(
-                        "open_pr", "tool", "Open pull request", 3360, 80,
+                        "open_pr", "tool", "Open pull request", 3640, 80,
                         tool="github_create_pr",
                         params={"base": "dev", "title": "{task}", "body": "{pr_description}"},
                         require_approval=False,
@@ -471,7 +494,8 @@ def _workflow_seeds(agent_ids: dict[str, int]) -> list[dict[str, Any]]:
                 ],
                 "edges": [
                     {"source": "plan", "target": "plan_gate"},
-                    {"source": "plan_gate", "target": "branch"},
+                    {"source": "plan_gate", "target": "branch_name"},
+                    {"source": "branch_name", "target": "branch"},
                     {"source": "branch", "target": "develop"},
                     {"source": "develop", "target": "unit_tests"},
                     {"source": "unit_tests", "target": "tests_gate"},
