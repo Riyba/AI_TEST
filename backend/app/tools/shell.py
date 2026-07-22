@@ -62,26 +62,80 @@ def _parse(command: str, allowed: set[str]) -> list[str] | str:
     return argv
 
 
-def run_command(root: Path, command: str) -> tuple[bool, str]:
+def run_command(root: Path, command: str) -> tuple[bool, str] | tuple[bool, str, bool]:
     argv = _parse(command, ALLOWED_EXECUTABLES)
     if isinstance(argv, str):
-        return False, argv
+        # A structurally rejected command (not allowlisted, shell operators,
+        # unparseable) is malformed input — it fails identically every retry.
+        return False, argv, False
     return _run(root, argv)
 
 
-def detect_test_command(root: Path) -> str | None:
-    if (root / "package.json").exists():
-        return "npm test"
-    if any((root / f).exists() for f in ("pytest.ini", "pyproject.toml", "setup.py", "tests", "conftest.py")):
-        return "pytest -q"
+# Detection descends at most this many levels below the repo root so a runner
+# living in a subdirectory (backend/, frontend/, packages/x/) is still found.
+_DETECT_MAX_DEPTH = 3
+
+# Directories that never hold the project's own tests and are expensive or
+# misleading to descend into (vendored deps, caches, VCS metadata).
+_DETECT_SKIP_DIRS = {
+    ".git", "node_modules", "__pycache__", ".venv", "venv", ".tox",
+    ".mypy_cache", ".pytest_cache", "dist", "build", ".next", "target",
+}
+
+_NPM_MARKERS = ("package.json",)
+_PYTEST_MARKERS = ("pytest.ini", "pyproject.toml", "setup.py", "tests", "conftest.py")
+
+
+def _command_for_dir(directory: Path, rel: str) -> str | None:
+    """Test command for markers in `directory`, or None. `rel` is the path
+    relative to the repo root ("" for the root itself); a non-empty `rel` is
+    threaded into the command so it runs against that subdirectory."""
+    if any((directory / f).exists() for f in _NPM_MARKERS):
+        return "npm test" if not rel else f"npm --prefix {rel} test"
+    if any((directory / f).exists() for f in _PYTEST_MARKERS):
+        return "pytest -q" if not rel else f"pytest -q {rel}"
     return None
 
 
-def run_tests(root: Path, command: str = "") -> tuple[bool, str]:
+def _iter_dirs(root: Path):
+    """Yield (directory, rel) breadth-first from `root` down to
+    _DETECT_MAX_DEPTH, root first, children sorted for deterministic results."""
+    queue: list[tuple[Path, str, int]] = [(root, "", 0)]
+    while queue:
+        directory, rel, depth = queue.pop(0)
+        yield directory, rel
+        if depth >= _DETECT_MAX_DEPTH:
+            continue
+        try:
+            children = sorted(
+                p for p in directory.iterdir()
+                if p.is_dir()
+                and p.name not in _DETECT_SKIP_DIRS
+                and not p.name.startswith(".")
+            )
+        except OSError:
+            children = []
+        for child in children:
+            child_rel = f"{rel}/{child.name}" if rel else child.name
+            queue.append((child, child_rel, depth + 1))
+
+
+def detect_test_command(root: Path) -> str | None:
+    """Find a runnable test command, checking the root first and then
+    descending into subdirectories. The shallowest match wins."""
+    for directory, rel in _iter_dirs(root):
+        command = _command_for_dir(directory, rel)
+        if command:
+            return command
+    return None
+
+
+def run_tests(root: Path, command: str = "") -> tuple[bool, str] | tuple[bool, str, bool]:
     command = command.strip() or detect_test_command(root) or ""
     if not command:
-        return False, "could not detect a test runner; pass an explicit command"
+        # No detectable runner and none supplied — a setup gap, not a flake.
+        return False, "could not detect a test runner; pass an explicit command", False
     argv = _parse(command, TEST_RUNNERS)
     if isinstance(argv, str):
-        return False, argv
+        return False, argv, False
     return _run(root, argv)

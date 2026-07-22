@@ -73,7 +73,9 @@ factories in `app/graph/nodes.py`.
 
 All nodes share one `WorkflowState` (`app/graph/state.py`): `task`, `repo_path`,
 `node_outputs` (node_id → output text, merged with a reducer), `last_output`,
-`last_tool_success`, `route`. Prompt templates and tool params are rendered with
+`last_tool_success`, `route`. The loop guard (below) adds `last_tool_retryable`,
+`last_tool_attempts`, `attempts` (per-node execution counts, summed with a
+reducer), and `aborted_nodes`. Prompt templates and tool params are rendered with
 `{task}`, `{repo_path}`, `{last_output}`, and `{<node_id>}` placeholders
 (`nodes.render`, unknown placeholders pass through unchanged).
 
@@ -101,8 +103,19 @@ All nodes share one `WorkflowState` (`app/graph/state.py`): `task`, `repo_path`,
   constraint as a regular agent loop.
 - **tool** — renders params, then executes one registry tool. If the tool is
   mutating and the node's `require_approval` is true, it interrupts first (below).
+  A **loop guard** runs before any side effect: a tool that fails terminally
+  (`ToolResult.retryable=False` — a missing prerequisite such as an absent
+  source branch, or a misconfiguration) is recorded so that looping straight
+  back into the node aborts instead of retrying; and every node has an attempt
+  budget (`Settings.max_tool_attempts`, per-node override `max_attempts`) that
+  caps how many times it runs in one loop. Both raise `LoopAbortedError`, which
+  the runner turns into a failed run with the real cause rather than letting the
+  workflow spin to LangGraph's recursion limit.
 - **condition** — evaluates its predicate (`tool_success`, `output_contains`,
-  `output_not_contains`) and writes `route` for the edge router.
+  `output_not_contains`, `should_retry`) and writes `route` for the edge router.
+  `should_retry` is true only while a retry could still help (last tool failed,
+  the failure was retryable, budget not spent) — wire a workflow's give-up edge
+  to its `false` branch for graceful recovery instead of a hard abort.
 - **approval** — interrupts with a rendered message plus the current
   `last_output`; the reviewer can approve, reject, or replace the output.
 

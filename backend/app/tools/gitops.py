@@ -71,7 +71,9 @@ def _slugify(text: str, max_len: int = 40) -> str:
     return slug[:max_len].strip("-") or "change"
 
 
-def create_branch(root: Path, base: str = "dev", name: str = "") -> tuple[bool, str]:
+def create_branch(
+    root: Path, base: str = "dev", name: str = ""
+) -> tuple[bool, str] | tuple[bool, str, bool]:
     """Create and check out a new branch off ``base``, named from a slugified
     ``name`` plus a random suffix for uniqueness. The caller's ``name`` is
     never used as a raw git ref — it only ever contributes lowercase
@@ -86,7 +88,15 @@ def create_branch(root: Path, base: str = "dev", name: str = "") -> tuple[bool, 
     ok, out = _git(root, "checkout", "-b", branch, start_point)
     if not ok:
         detail = out if fetch_ok else f"{out}\n(fetch of origin/{base} also failed: {fetch_out})"
-        return False, f"failed to create branch '{branch}' from '{start_point}': {detail}"
+        # A checkout that fails here almost always means the base ref doesn't
+        # exist (neither origin/<base> nor a local <base>) — a missing
+        # prerequisite that no amount of retrying will conjure. Flag it
+        # terminal so a workflow retry loop gives up instead of spinning.
+        return (
+            False,
+            f"failed to create branch '{branch}' from '{start_point}': {detail}",
+            False,
+        )
     return True, f"created and checked out branch '{branch}' from '{start_point}'"
 
 

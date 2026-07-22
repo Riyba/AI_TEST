@@ -32,6 +32,13 @@ class RunRejectedError(Exception):
     """Raised when a human rejects an approval gate."""
 
 
+class LoopAbortedError(Exception):
+    """Raised when a tool node would keep looping to no purpose: either it hit
+    a terminal (non-retryable) failure, or it exhausted its retry budget. Ends
+    the run with an actionable message instead of spinning to the recursion
+    limit and dying with an opaque GraphRecursionError."""
+
+
 @dataclass
 class AgentDef:
     id: int
@@ -58,6 +65,9 @@ class RunContext:
     node_names: dict[str, str] = field(default_factory=dict)
     # Files attached when the run was launched; given to every agent node.
     run_attachments: list[AttachmentContent] = field(default_factory=list)
+    # Default cap on how many times a single tool node may execute in one run
+    # before the engine aborts it as a stuck loop (Settings.max_tool_attempts).
+    max_tool_attempts: int = 5
 
     # -- persistence helpers -------------------------------------------------
 
@@ -508,8 +518,25 @@ def make_orchestrator_node(node: NodeSpec, ctx: RunContext):
 
 def make_tool_node(node: NodeSpec, ctx: RunContext):
     tool = REGISTRY[node.tool or ""]
+    max_attempts = max(1, node.max_attempts or ctx.max_tool_attempts)
 
     async def run_tool(state: WorkflowState) -> dict[str, Any]:
+        # Loop guard, evaluated BEFORE any side effect (and before the approval
+        # gate, so we never ask a human to approve a step we're about to abort).
+        # Two ways a re-entry is pointless:
+        #   1. a prior pass here failed terminally (missing prereq / misconfig);
+        #   2. we've already burned the retry budget on this node.
+        prior_attempts = state.get("attempts", {}).get(node.id, 0)
+        aborted = state.get("aborted_nodes", {})
+        if node.id in aborted:
+            raise LoopAbortedError(aborted[node.id])
+        if prior_attempts >= max_attempts:
+            raise LoopAbortedError(
+                f"tool node '{node.name or node.id}' ({tool.name}) exhausted its "
+                f"retry budget of {max_attempts} attempts without succeeding; "
+                "aborting to avoid an infinite loop."
+            )
+
         params = {
             k: render(v, state) if isinstance(v, str) else v
             for k, v in node.params.items()
@@ -545,18 +572,45 @@ def make_tool_node(node: NodeSpec, ctx: RunContext):
             status="succeeded" if result.success else "failed",
             output={"success": result.success, "text": result.output},
         )
-        return {
+        attempts_now = prior_attempts + 1
+        updates: dict[str, Any] = {
             "node_outputs": {node.id: result.output},
             "last_output": result.output,
             "last_tool_success": result.success,
+            "last_tool_retryable": result.retryable,
+            "last_tool_attempts": attempts_now,
+            "attempts": {node.id: 1},
         }
+        # A terminal failure doesn't raise on this pass — the workflow may have
+        # an authored give-up branch (e.g. a `should_retry` condition routing
+        # elsewhere) that gets to run. But we record it, so if the graph instead
+        # loops straight back here, the guard above aborts before re-executing.
+        if not result.success and not result.retryable:
+            updates["aborted_nodes"] = {
+                node.id: (
+                    f"tool node '{node.name or node.id}' ({tool.name}) failed and "
+                    f"cannot succeed on retry: {result.output[:500]}"
+                )
+            }
+        return updates
 
     return run_tool
 
 
-def _eval_predicate(predicate: Predicate, state: WorkflowState) -> bool:
+def _eval_predicate(
+    predicate: Predicate, state: WorkflowState, *, max_attempts: int = 5
+) -> bool:
     if predicate.kind == "tool_success":
         return bool(state.get("last_tool_success", False))
+    if predicate.kind == "should_retry":
+        # True only while retrying still has a chance: the last tool failed, the
+        # failure was retryable, and the budget isn't spent. Lets a workflow
+        # route a "give up" branch on the false edge instead of looping blindly.
+        return (
+            not state.get("last_tool_success", True)
+            and state.get("last_tool_retryable", True)
+            and state.get("last_tool_attempts", 0) < max_attempts
+        )
     if predicate.node_id:
         subject = state.get("node_outputs", {}).get(predicate.node_id, "")
     else:
@@ -570,7 +624,7 @@ def make_condition_node(node: NodeSpec, ctx: RunContext):
     assert predicate is not None
 
     async def run_condition(state: WorkflowState) -> dict[str, Any]:
-        result = _eval_predicate(predicate, state)
+        result = _eval_predicate(predicate, state, max_attempts=ctx.max_tool_attempts)
         step_id = await ctx.start_step(
             node, {"predicate": predicate.model_dump()}
         )

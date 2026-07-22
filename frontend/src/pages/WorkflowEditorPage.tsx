@@ -123,7 +123,9 @@ function subtitleFor(spec: NodeSpec, agents: Agent[]): string {
   if (spec.type === "condition") {
     const p = spec.predicate;
     if (!p) return "";
-    return p.kind === "tool_success" ? "tool succeeded?" : `${p.kind}: "${p.value}"`;
+    if (p.kind === "tool_success") return "tool succeeded?";
+    if (p.kind === "should_retry") return "retry worth it?";
+    return `${p.kind}: "${p.value}"`;
   }
   return "";
 }
@@ -545,6 +547,21 @@ function NodeFields({
           }}
         />
         {paramsError && <p className="warn small">{paramsError}</p>}
+        <label>Max attempts (blank = default)</label>
+        <input
+          type="number"
+          min={1}
+          value={spec.max_attempts ?? ""}
+          placeholder="workflow default"
+          onChange={(e) =>
+            onChange({ max_attempts: e.target.value ? Number(e.target.value) : null })
+          }
+        />
+        <p className="muted small">
+          If this node is in a retry loop, the run aborts after this many attempts
+          rather than looping forever. A non-retryable failure (e.g. a missing
+          source branch) stops immediately regardless.
+        </p>
         {toolMeta?.mutating && (
           <div className="checkbox-row">
             <input
@@ -574,10 +591,18 @@ function NodeFields({
           }
         >
           <option value="tool_success">last tool succeeded</option>
+          <option value="should_retry">last tool failed — retry worth it?</option>
           <option value="output_contains">output contains…</option>
           <option value="output_not_contains">output does not contain…</option>
         </select>
-        {predicate.kind !== "tool_success" && (
+        {predicate.kind === "should_retry" && (
+          <p className="muted small">
+            True while a retry could still help: the last tool failed, the failure
+            was <i>retryable</i> (not a missing prerequisite), and the node's retry
+            budget isn't spent. Route the <b>false</b> edge to a give-up/notify path.
+          </p>
+        )}
+        {predicate.kind !== "tool_success" && predicate.kind !== "should_retry" && (
           <>
             <label>Substring</label>
             <input

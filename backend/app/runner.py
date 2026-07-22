@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 from sqlalchemy import select, update
 
@@ -22,7 +23,7 @@ from .config import get_settings
 from .db import SessionLocal
 from .events import bus
 from .graph.builder import build_graph
-from .graph.nodes import AgentDef, RunContext, RunRejectedError
+from .graph.nodes import AgentDef, LoopAbortedError, RunContext, RunRejectedError
 from .graph.spec import GraphSpec, validate_graph
 from .llm import get_provider
 from .models import TERMINAL_STATUSES, Agent, Artifact, Attachment, Run, Workflow
@@ -110,6 +111,7 @@ class RunManager:
                 bus=bus,
                 session_factory=SessionLocal,
                 run_attachments=run_attachments,
+                max_tool_attempts=settings.max_tool_attempts,
             )
 
             await _set_status(run_id, "running")
@@ -140,6 +142,10 @@ class RunManager:
                         "node_outputs": {},
                         "last_output": "",
                         "last_tool_success": True,
+                        "last_tool_retryable": True,
+                        "last_tool_attempts": 0,
+                        "attempts": {},
+                        "aborted_nodes": {},
                     }
 
                 async for chunk in graph.astream(
@@ -186,6 +192,27 @@ class RunManager:
             await datadog.sync_run(run_id)
             bus.emit(run_id, "run_status", status="rejected", error=str(exc))
             bus.emit(run_id, "run_finished", status="rejected")
+            bus.close(run_id)
+        except LoopAbortedError as exc:
+            # A retry loop that couldn't make progress — fail with the actual
+            # cause (missing prereq / exhausted budget), not an opaque error.
+            await _set_status(run_id, "failed", finished=True, error=str(exc))
+            await datadog.sync_run(run_id)
+            bus.emit(run_id, "run_status", status="failed", error=str(exc))
+            bus.emit(run_id, "run_finished", status="failed")
+            bus.close(run_id)
+        except GraphRecursionError:
+            # Last-resort backstop: some other unbounded loop hit LangGraph's
+            # step ceiling. Translate the raw error into something actionable.
+            message = (
+                "workflow exceeded its step limit — it is likely stuck in a loop "
+                "(a condition that never resolves, or steps that keep retrying). "
+                "Check for a retry loop with no exit path."
+            )
+            await _set_status(run_id, "failed", finished=True, error=message)
+            await datadog.sync_run(run_id)
+            bus.emit(run_id, "run_status", status="failed", error=message)
+            bus.emit(run_id, "run_finished", status="failed")
             bus.close(run_id)
         except Exception as exc:  # noqa: BLE001 — surface any failure on the run
             await _set_status(run_id, "failed", finished=True, error=str(exc))

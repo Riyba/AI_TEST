@@ -20,6 +20,13 @@ from . import fs, github, gitops, shell
 class ToolResult:
     success: bool
     output: str
+    # Whether re-running the tool could plausibly succeed. False marks a
+    # *terminal* failure — a missing prerequisite or misconfiguration (absent
+    # source branch, no GITHUB_TOKEN, a command that isn't allowlisted) that
+    # will fail identically on every retry. The workflow engine uses this to
+    # break out of retry loops instead of looping to the recursion limit.
+    # Only meaningful when success is False; always True on success.
+    retryable: bool = True
 
 
 @dataclass
@@ -28,7 +35,9 @@ class Tool:
     description: str
     input_schema: dict[str, Any]
     mutating: bool
-    handler: Callable[[Path, dict[str, Any]], tuple[bool, str]]
+    # Handlers return (success, output) or, to flag a terminal failure that
+    # retries can't fix, (success, output, retryable). execute_tool normalizes.
+    handler: Callable[[Path, dict[str, Any]], tuple[bool, ...]]
     params_doc: dict[str, str] = field(default_factory=dict)
 
 
@@ -266,10 +275,16 @@ def tool_schemas_for(names: list[str], *, include_mutating: bool) -> list[dict[s
 async def execute_tool(name: str, repo_path: Path, params: dict[str, Any]) -> ToolResult:
     tool = REGISTRY.get(name)
     if tool is None:
-        return ToolResult(False, f"Unknown tool: {name}")
+        # An unknown tool name never becomes known by retrying.
+        return ToolResult(False, f"Unknown tool: {name}", retryable=False)
     try:
         # Handlers are sync (subprocess / file IO); run off the event loop.
-        success, output = await asyncio.to_thread(tool.handler, repo_path, params)
-        return ToolResult(success, output)
+        result = await asyncio.to_thread(tool.handler, repo_path, params)
+        success, output = result[0], result[1]
+        # Handlers may append a `retryable` flag; absent, failures default to
+        # retryable (conservative — we only short-circuit loops on an explicit
+        # terminal signal).
+        retryable = bool(result[2]) if len(result) > 2 else True
+        return ToolResult(success, output, retryable=retryable)
     except Exception as exc:  # noqa: BLE001 — tool errors go back to the model
         return ToolResult(False, f"Tool error: {exc}")

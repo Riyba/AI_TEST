@@ -24,7 +24,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 NodeType = Literal["agent", "orchestrator", "tool", "condition", "approval"]
-PredicateKind = Literal["output_contains", "output_not_contains", "tool_success"]
+PredicateKind = Literal[
+    "output_contains", "output_not_contains", "tool_success", "should_retry"
+]
 
 
 class Predicate(BaseModel):
@@ -64,6 +66,9 @@ class NodeSpec(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     # Only meaningful for mutating tools; True => interrupt for approval.
     require_approval: bool = True
+    # Per-node override of Settings.max_tool_attempts: how many times this tool
+    # node may execute in one run before the engine aborts it as a stuck loop.
+    max_attempts: int | None = None
 
     # type == "condition"
     predicate: Predicate | None = None

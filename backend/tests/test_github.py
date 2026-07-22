@@ -65,7 +65,7 @@ def captured(monkeypatch):
 
 
 def test_missing_token_returns_clear_error(with_origin: Path, token_missing) -> None:
-    ok, msg = github.create_pull_request(with_origin, {})
+    ok, msg, *_ = github.create_pull_request(with_origin, {})
     assert not ok
     assert "GITHUB_TOKEN" in msg
 
@@ -91,7 +91,7 @@ def test_https_remote_parsed(git_repo: Path, token_configured, captured) -> None
 
 
 def test_missing_origin_fails_cleanly(git_repo: Path, token_configured, captured) -> None:
-    ok, msg = github.create_pull_request(git_repo, {"base": "dev"})
+    ok, msg, *_ = github.create_pull_request(git_repo, {"base": "dev"})
     assert not ok
     assert "origin" in msg.lower()
     assert not captured
@@ -99,7 +99,7 @@ def test_missing_origin_fails_cleanly(git_repo: Path, token_configured, captured
 
 def test_non_github_remote_rejected(git_repo: Path, token_configured, captured) -> None:
     _run(git_repo, "remote", "add", "origin", "https://gitlab.com/acme/widgets.git")
-    ok, msg = github.create_pull_request(git_repo, {"base": "dev"})
+    ok, msg, *_ = github.create_pull_request(git_repo, {"base": "dev"})
     assert not ok
     assert "github.com" in msg
     assert not captured

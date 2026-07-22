@@ -56,24 +56,28 @@ def _open_pr(
     return False, f"GitHub rejected PR creation: HTTP {response.status_code} {response.text[:500]}"
 
 
-def create_pull_request(root: Path, params: dict[str, Any]) -> tuple[bool, str]:
+def create_pull_request(
+    root: Path, params: dict[str, Any]
+) -> tuple[bool, str] | tuple[bool, str, bool]:
+    # Each early return below is a missing prerequisite/misconfiguration
+    # (no token, no/foreign remote, no branch) — terminal, not worth retrying.
     token = get_settings().github_token
     if not token:
-        return False, "GITHUB_TOKEN is not configured; set it in .env to enable PR creation"
+        return False, "GITHUB_TOKEN is not configured; set it in .env to enable PR creation", False
 
     ok, remote = gitops.remote_url(root)
     if not ok:
-        return False, f"could not read git remote 'origin': {remote}"
+        return False, f"could not read git remote 'origin': {remote}", False
     parsed = _parse_owner_repo(remote)
     if parsed is None:
-        return False, f"origin remote is not a github.com URL: {remote}"
+        return False, f"origin remote is not a github.com URL: {remote}", False
     owner, repo = parsed
 
     head = str(params.get("head") or "").strip()
     if not head:
         ok, head = gitops.current_branch(root)
         if not ok:
-            return False, f"could not determine current branch: {head}"
+            return False, f"could not determine current branch: {head}", False
 
     base = str(params.get("base") or "dev").strip()
     title = str(params.get("title") or "").strip() or f"Merge {head} into {base}"

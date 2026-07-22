@@ -108,6 +108,16 @@ def test_create_branch_blank_name_still_produces_valid_branch(git_repo: Path) ->
     assert ok, msg
 
 
+def test_create_branch_missing_base_is_non_retryable(git_repo: Path) -> None:
+    """Branching off a base that exists neither on origin nor locally is a
+    missing-prerequisite failure — flagged terminal so a retry loop gives up."""
+    result = gitops.create_branch(git_repo, base="does-not-exist", name="x")
+    success, msg, retryable = result
+    assert not success
+    assert retryable is False
+    assert "does-not-exist" in msg
+
+
 # --------------------------------------------------------------------------- #
 # commit                                                                      #
 # --------------------------------------------------------------------------- #

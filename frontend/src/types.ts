@@ -1,7 +1,11 @@
 // Mirrors backend/app/schemas.py and app/graph/spec.py
 
 export type NodeType = "agent" | "orchestrator" | "tool" | "condition" | "approval";
-export type PredicateKind = "output_contains" | "output_not_contains" | "tool_success";
+export type PredicateKind =
+  | "output_contains"
+  | "output_not_contains"
+  | "tool_success"
+  | "should_retry";
 
 export interface Predicate {
   kind: PredicateKind;
@@ -20,6 +24,7 @@ export interface NodeSpec {
   tool?: string | null;
   params?: Record<string, unknown>;
   require_approval?: boolean;
+  max_attempts?: number | null;
   predicate?: Predicate | null;
   message?: string;
 }

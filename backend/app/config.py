@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     # Default max_tokens per LLM call.
     llm_max_tokens: int = 8192
 
+    # How many times a single tool node may execute within one run before the
+    # engine aborts it as a stuck loop. A safety net for retry loops whose exit
+    # condition never becomes true; a node can override it via `max_attempts`.
+    # (A non-retryable tool failure short-circuits immediately, regardless.)
+    max_tool_attempts: int = 5
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "app.db"

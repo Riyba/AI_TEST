@@ -132,6 +132,37 @@ async def test_execute_unknown_tool(repo: Path) -> None:
     result = await execute_tool("nope", repo, {})
     assert not result.success
     assert "Unknown tool" in result.output
+    assert result.retryable is False  # an unknown name never becomes known
+
+
+@pytest.mark.asyncio
+async def test_execute_preserves_non_retryable_flag(repo: Path, monkeypatch) -> None:
+    """A handler returning a 3-tuple (success, output, retryable) has its
+    terminal-failure flag surfaced on the ToolResult."""
+
+    def terminal(root: Path, params: dict[str, Any]) -> tuple[bool, str, bool]:
+        return False, "missing prerequisite", False
+
+    monkeypatch.setattr(REGISTRY["read_file"], "handler", terminal)
+    result = await execute_tool("read_file", repo, {"path": "f.txt"})
+    assert not result.success
+    assert result.retryable is False
+
+
+@pytest.mark.asyncio
+async def test_execute_defaults_two_tuple_failures_to_retryable(
+    repo: Path, monkeypatch
+) -> None:
+    """A plain (success, output) failure defaults to retryable — we only
+    short-circuit loops on an explicit terminal signal."""
+
+    def flake(root: Path, params: dict[str, Any]) -> tuple[bool, str]:
+        return False, "transient blip"
+
+    monkeypatch.setattr(REGISTRY["read_file"], "handler", flake)
+    result = await execute_tool("read_file", repo, {"path": "f.txt"})
+    assert not result.success
+    assert result.retryable is True
 
 
 @pytest.mark.asyncio
