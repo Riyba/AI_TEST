@@ -249,7 +249,14 @@ async def run_agent_loop(
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
         )
-        text = response.text
+        # Keep the latest *substantive* answer only. A model that emits its
+        # final answer (e.g. a review + "VERDICT: APPROVE") and then makes one
+        # more tool call whose turn carries little or no text would otherwise
+        # have that answer clobbered by the empty turn — and, if the loop then
+        # exhausts its turn/token budget, replaced by a sentinel with no verdict
+        # at all, which routes an approved review back to the developer forever.
+        if response.text.strip():
+            text = response.text
         if response.stop_reason != "tool_use" or not response.tool_calls:
             break
         if total_in + total_out >= agent.max_tokens:
@@ -597,6 +604,18 @@ def make_tool_node(node: NodeSpec, ctx: RunContext):
     return run_tool
 
 
+_EMPHASIS = str.maketrans("", "", "*_`")
+
+
+def _normalize_for_match(text: str) -> str:
+    """Lower-case and strip markdown emphasis / collapse whitespace before a
+    substring test. An LLM told to end with a marker like ``VERDICT: APPROVE``
+    routinely wraps it (``**VERDICT: APPROVE**``, ``VERDICT: **APPROVE**``) or
+    wraps the line, which a raw substring match silently misses — sending, e.g.,
+    an approved review down the "rejected" edge and looping forever."""
+    return re.sub(r"\s+", " ", text.translate(_EMPHASIS)).lower().strip()
+
+
 def _eval_predicate(
     predicate: Predicate, state: WorkflowState, *, max_attempts: int = 5
 ) -> bool:
@@ -615,7 +634,7 @@ def _eval_predicate(
         subject = state.get("node_outputs", {}).get(predicate.node_id, "")
     else:
         subject = state.get("last_output", "")
-    contains = predicate.value.lower() in subject.lower()
+    contains = _normalize_for_match(predicate.value) in _normalize_for_match(subject)
     return contains if predicate.kind == "output_contains" else not contains
 
 

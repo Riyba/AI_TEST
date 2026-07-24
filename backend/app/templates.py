@@ -188,8 +188,11 @@ AGENT_SEEDS: list[dict[str, Any]] = [
             "another engineer to act on without asking you anything further."
         ),
         "model": "eu.anthropic.claude-sonnet-5",
-        "max_turns": 15,
-        "max_tokens": 150_000,
+        # Headroom so the gate agent reaches a clean final turn with its verdict
+        # rather than being cut off mid-review (a truncated review has no verdict
+        # line and loops back to the developer).
+        "max_turns": 25,
+        "max_tokens": 200_000,
         "tools": READ_TOOLS + GIT_READ_TOOLS,
     },
     {

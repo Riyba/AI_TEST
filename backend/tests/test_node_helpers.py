@@ -66,6 +66,24 @@ def test_predicate_targets_specific_node_output() -> None:
     assert _eval_predicate(pred, state) is True
 
 
+def test_output_contains_ignores_markdown_emphasis() -> None:
+    """A review gate matching 'VERDICT: APPROVE' must still fire when the model
+    wraps the marker in markdown, otherwise an approval loops back forever."""
+    pred = Predicate(kind="output_contains", value="VERDICT: APPROVE")
+    for wrapped in ("**VERDICT: APPROVE**", "VERDICT: **APPROVE**", "`VERDICT: APPROVE`"):
+        assert _eval_predicate(pred, {"last_output": f"...\n{wrapped}"}) is True
+
+
+def test_output_contains_ignores_line_wrapping() -> None:
+    pred = Predicate(kind="output_contains", value="VERDICT: APPROVE")
+    assert _eval_predicate(pred, {"last_output": "VERDICT:\n   APPROVE"}) is True
+
+
+def test_output_contains_still_rejects_changes_requested() -> None:
+    pred = Predicate(kind="output_contains", value="VERDICT: APPROVE")
+    assert _eval_predicate(pred, {"last_output": "**VERDICT: CHANGES_REQUESTED**"}) is False
+
+
 # --------------------------------------------------------------------------- #
 # should_retry predicate                                                      #
 # --------------------------------------------------------------------------- #
